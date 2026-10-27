@@ -116,6 +116,8 @@ function UI.window(screenGui, title, render)
 		Size = UDim2.fromOffset(620, 440),
 		BackgroundColor3 = T.Panel,
 		Visible = false,
+		Active = true, -- clicks on the window don't reach the game (no digging through it)
+		ZIndex = 10, -- above the HUD and Grandpa Gus's tips, so the close button is never covered
 		Parent = screenGui,
 	}, { UI.corner(16), UI.stroke(T.Background, 4) })
 

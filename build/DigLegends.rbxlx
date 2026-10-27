@@ -859,6 +859,25 @@ WorldService.Start()
 NpcService.Start()
 DataService.Start()
 
+-- Test helpers for Roblox Studio only (never in the live game). In the command
+-- bar, with the Server view selected:
+--   game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)
+if game:GetService("RunService"):IsStudio() then
+	local test = Instance.new("BindableFunction")
+	test.Name = "DigLegendsTest"
+	test.OnInvoke = function(command, amount)
+		for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+			DataService.Update(player, function(data)
+				if command == "coins" then
+					data.coins += amount
+				end
+			end)
+		end
+		return "ok"
+	end
+	test.Parent = game:GetService("ServerStorage")
+end
+
 print("[Dig Legends] Server ready")
 ]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">CosmeticService</string><ProtectedString name="Source"><![CDATA[-- Shows each player's name tag (name, digger level, title, VIP) and cosmetics:
 -- trails, shovel skins and VIP extras.
@@ -1564,7 +1583,9 @@ local function lose(player, dig, reason)
 	if digs[player] == dig then
 		clearDig(player)
 	end
-	if dig.phase == "minigame" and reason ~= "walked" then
+	-- Once the find is rolled the spot is used up, however the dig ends. Otherwise
+	-- players could put the shovel away to reroll a find they don't like.
+	if dig.phase == "minigame" then
 		coolSpot(player, dig.spot)
 	end
 	Remotes.DigResult:FireClient(player, dig.id, nil, reason)
@@ -1890,7 +1911,10 @@ function DigService.Start()
 
 	DataService.OnLoaded(function(player)
 		player.CharacterAdded:Connect(function()
-			clearDig(player)
+			local dig = digs[player]
+			if dig then
+				lose(player, dig, "walked")
+			end
 			task.defer(giveShovel, player)
 		end)
 		task.spawn(function()
@@ -2001,7 +2025,7 @@ function EconomyService.SellAll(player, auto)
 	if count == 0 then
 		return false, "Nothing to sell (favorites are never sold)"
 	end
-	notify(player, string.format("Sold %d finds for %s coins", count, Format.Number(earned)), "coins")
+	notify(player, string.format("Sold %d %s for %s coins", count, count == 1 and "find" or "finds", Format.Number(earned)), "coins")
 	if not auto then
 		TutorialService.Event(player, "Sell")
 	end
@@ -3658,7 +3682,13 @@ local function setRooted(on)
 	end
 end
 
+-- Closes the dig minigame if one is on screen (set while it runs)
+local closeMinigame = nil
+
 local function reset()
+	if closeMinigame then
+		closeMinigame()
+	end
 	setRooted(false)
 	phase = "idle"
 	digId = nil
@@ -3787,6 +3817,9 @@ local function watchCharacter(character)
 	end)
 	character.ChildRemoved:Connect(function(child)
 		if child:IsA("Tool") and child.Name == SHOVEL_NAME and (phase == "digging" or phase == "minigame") then
+			if phase == "minigame" and digSpot then
+				hideSpot(digSpot) -- the server uses up the spot too
+			end
 			Remotes.CancelDig:FireServer()
 			reset()
 		end
@@ -3863,16 +3896,22 @@ local function startMinigame(id, params)
 	end
 	refreshLines()
 
-	local function finish(outcome)
-		if finished then
-			return
-		end
+	local function close()
 		finished = true
-		phase = "done"
+		closeMinigame = nil
 		for _, connection in ipairs(connections) do
 			connection:Disconnect()
 		end
 		box:Destroy()
+	end
+	closeMinigame = close
+
+	local function finish(outcome)
+		if finished then
+			return
+		end
+		close()
+		phase = "done"
 		if outcome == "cracked" then
 			CameraController.Shake(4, 0.3)
 		end
@@ -3972,7 +4011,7 @@ local function updateAim()
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local holding = character and character:FindFirstChild(SHOVEL_NAME)
-	if phase ~= "idle" or not holding or not root then
+	if phase ~= "idle" or not holding or not root or UI.IsWindowOpen() then
 		aimLabel.Visible = false
 		highlight.Adornee = nil
 		CameraController.SetCrosshairColor(nil)
@@ -4485,6 +4524,7 @@ function Notifications.Init(screenGui)
 		Position = UDim2.new(1, -16, 0, 70),
 		Size = UDim2.fromOffset(320, 400),
 		BackgroundTransparency = 1,
+		ZIndex = 20, -- above open windows
 		Parent = screenGui,
 	}, { UI.list(6) })
 
@@ -4784,7 +4824,7 @@ local function renderBounties(body)
 			end
 		end
 		local card = row(body, 70, index)
-		UI.label(string.format("Bring %d %s", bounty.count, find.name), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.62, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
+		UI.label(string.format("Bring %dx %s", bounty.count, find.name), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.62, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
 		local reward = Bounties.Reward(bounty, Config.SellMultiplier(data.rebirths))
 		local zone = Zones.ById[find.zone]
 		UI.label(string.format("Have %d/%d  -  found in %s  -  reward %s coins + %d %s", math.min(have, bounty.count), bounty.count, zone and zone.name or "", Format.Number(reward), bounty.charmAmount, Charms.ById[bounty.charm].name), {
@@ -5264,6 +5304,8 @@ function UI.window(screenGui, title, render)
 		Size = UDim2.fromOffset(620, 440),
 		BackgroundColor3 = T.Panel,
 		Visible = false,
+		Active = true, -- clicks on the window don't reach the game (no digging through it)
+		ZIndex = 10, -- above the HUD and Grandpa Gus's tips, so the close button is never covered
 		Parent = screenGui,
 	}, { UI.corner(16), UI.stroke(T.Background, 4) })
 

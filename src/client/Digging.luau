@@ -92,7 +92,13 @@ local function setRooted(on)
 	end
 end
 
+-- Closes the dig minigame if one is on screen (set while it runs)
+local closeMinigame = nil
+
 local function reset()
+	if closeMinigame then
+		closeMinigame()
+	end
 	setRooted(false)
 	phase = "idle"
 	digId = nil
@@ -221,6 +227,9 @@ local function watchCharacter(character)
 	end)
 	character.ChildRemoved:Connect(function(child)
 		if child:IsA("Tool") and child.Name == SHOVEL_NAME and (phase == "digging" or phase == "minigame") then
+			if phase == "minigame" and digSpot then
+				hideSpot(digSpot) -- the server uses up the spot too
+			end
 			Remotes.CancelDig:FireServer()
 			reset()
 		end
@@ -297,16 +306,22 @@ local function startMinigame(id, params)
 	end
 	refreshLines()
 
-	local function finish(outcome)
-		if finished then
-			return
-		end
+	local function close()
 		finished = true
-		phase = "done"
+		closeMinigame = nil
 		for _, connection in ipairs(connections) do
 			connection:Disconnect()
 		end
 		box:Destroy()
+	end
+	closeMinigame = close
+
+	local function finish(outcome)
+		if finished then
+			return
+		end
+		close()
+		phase = "done"
 		if outcome == "cracked" then
 			CameraController.Shake(4, 0.3)
 		end
@@ -406,7 +421,7 @@ local function updateAim()
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local holding = character and character:FindFirstChild(SHOVEL_NAME)
-	if phase ~= "idle" or not holding or not root then
+	if phase ~= "idle" or not holding or not root or UI.IsWindowOpen() then
 		aimLabel.Visible = false
 		highlight.Adornee = nil
 		CameraController.SetCrosshairColor(nil)

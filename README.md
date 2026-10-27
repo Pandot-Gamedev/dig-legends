@@ -8,6 +8,8 @@ The ready-to-open game file is [build/DigLegends.rbxlx](build/DigLegends.rbxlx).
 ## Status
 
 Step 2 of 6: digging works in the **Backyard** zone and the starter patch in Dig Town.
+Play-tested in Roblox Studio on 2026-10-27: the guide, digging, finds, selling, shovels, charms,
+bounties and the bridge to the Backyard all work with no script errors.
 Still to come: the other four zones (step 3), Treasure Rush and dig buddies (step 4),
 and the shop setup (step 5). All shop ids are 0, so passes and cosmetics show "Coming soon".
 
@@ -23,6 +25,10 @@ and the shop setup (step 5). All shop ids are 0, so passes and cosmetics show "C
 5. Saving only works after the place is published with "Enable Studio Access to API Services" on.
 
 If the shovel is held at a strange angle, change `SHOVEL_TILT` in `src/server/DigService.luau`.
+
+Test helper (Studio only, never in the live game): to get coins for testing the shops, pick the
+**Server** view while playing and run this in the command bar:
+`game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)`
 
 ## What's in the game so far
 

@@ -22,4 +22,23 @@ WorldService.Start()
 NpcService.Start()
 DataService.Start()
 
+-- Test helpers for Roblox Studio only (never in the live game). In the command
+-- bar, with the Server view selected:
+--   game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)
+if game:GetService("RunService"):IsStudio() then
+	local test = Instance.new("BindableFunction")
+	test.Name = "DigLegendsTest"
+	test.OnInvoke = function(command, amount)
+		for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+			DataService.Update(player, function(data)
+				if command == "coins" then
+					data.coins += amount
+				end
+			end)
+		end
+		return "ok"
+	end
+	test.Parent = game:GetService("ServerStorage")
+end
+
 print("[Dig Legends] Server ready")

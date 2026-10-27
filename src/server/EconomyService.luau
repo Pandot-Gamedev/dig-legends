@@ -80,7 +80,7 @@ function EconomyService.SellAll(player, auto)
 	if count == 0 then
 		return false, "Nothing to sell (favorites are never sold)"
 	end
-	notify(player, string.format("Sold %d finds for %s coins", count, Format.Number(earned)), "coins")
+	notify(player, string.format("Sold %d %s for %s coins", count, count == 1 and "find" or "finds", Format.Number(earned)), "coins")
 	if not auto then
 		TutorialService.Event(player, "Sell")
 	end

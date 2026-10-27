@@ -27,6 +27,7 @@ function Notifications.Init(screenGui)
 		Position = UDim2.new(1, -16, 0, 70),
 		Size = UDim2.fromOffset(320, 400),
 		BackgroundTransparency = 1,
+		ZIndex = 20, -- above open windows
 		Parent = screenGui,
 	}, { UI.list(6) })
 

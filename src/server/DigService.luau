@@ -181,7 +181,9 @@ local function lose(player, dig, reason)
 	if digs[player] == dig then
 		clearDig(player)
 	end
-	if dig.phase == "minigame" and reason ~= "walked" then
+	-- Once the find is rolled the spot is used up, however the dig ends. Otherwise
+	-- players could put the shovel away to reroll a find they don't like.
+	if dig.phase == "minigame" then
 		coolSpot(player, dig.spot)
 	end
 	Remotes.DigResult:FireClient(player, dig.id, nil, reason)
@@ -507,7 +509,10 @@ function DigService.Start()
 
 	DataService.OnLoaded(function(player)
 		player.CharacterAdded:Connect(function()
-			clearDig(player)
+			local dig = digs[player]
+			if dig then
+				lose(player, dig, "walked")
+			end
 			task.defer(giveShovel, player)
 		end)
 		task.spawn(function()

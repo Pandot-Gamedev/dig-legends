@@ -253,7 +253,7 @@ local function renderBounties(body)
 			end
 		end
 		local card = row(body, 70, index)
-		UI.label(string.format("Bring %d %s", bounty.count, find.name), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.62, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
+		UI.label(string.format("Bring %dx %s", bounty.count, find.name), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.62, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
 		local reward = Bounties.Reward(bounty, Config.SellMultiplier(data.rebirths))
 		local zone = Zones.ById[find.zone]
 		UI.label(string.format("Have %d/%d  -  found in %s  -  reward %s coins + %d %s", math.min(have, bounty.count), bounty.count, zone and zone.name or "", Format.Number(reward), bounty.charmAmount, Charms.ById[bounty.charm].name), {
