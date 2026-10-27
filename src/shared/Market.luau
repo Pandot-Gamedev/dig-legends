@@ -31,10 +31,15 @@ function Market.HotFinds(now)
 	return hot, secondsLeft
 end
 
--- Coins for one find from the backpack, right now
-function Market.Price(entry, rebirths, hot)
+-- A player's coin multiplier: rebirths plus completed Collection pages
+function Market.Multiplier(data)
+	return Config.SellMultiplier(data.rebirths, Finds.CompletedPages(data.book))
+end
+
+-- Coins for one find from this player's backpack, right now
+function Market.Price(entry, data, hot)
 	hot = hot or Market.HotFinds()
-	local price = entry.value * Config.SellMultiplier(rebirths)
+	local price = entry.value * Market.Multiplier(data)
 	if hot[entry.id] then
 		price *= Market.HotMultiplier
 	end

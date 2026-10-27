@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Market = require(Shared.Market)
 local Zones = require(Shared.Zones)
 local Events = require(Shared.Events)
 local Charms = require(Shared.Charms)
@@ -49,8 +50,9 @@ function Hud.Init(screenGui)
 		local charm = Charms.ById[data.charms.equipped] or Charms.ById[Charms.Default]
 		charmLine.Text = charm.free and "Charm: none" or string.format("Charm: %s x%d", charm.name, data.charms.owned[charm.id] or 0)
 		charmLine.TextColor3 = charm.color
-		if data.rebirths > 0 then
-			bonus.Text = string.format("Rebirth %d: +%d%% coins", data.rebirths, math.floor((Config.SellMultiplier(data.rebirths) - 1) * 100 + 0.5))
+		local extra = math.floor((Market.Multiplier(data) - 1) * 100 + 0.5)
+		if extra > 0 then
+			bonus.Text = string.format("Coin bonus: +%d%%", extra)
 		else
 			bonus.Text = "Sell finds at the Trading Post"
 		end

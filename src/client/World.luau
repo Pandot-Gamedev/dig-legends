@@ -106,7 +106,7 @@ end
 -- Seagulls circling over the islands
 local function seagulls()
 	local birds = {}
-	local centers = { Vector3.new(0, 0, 0), Vector3.new(230, 0, 0), Vector3.new(460, 0, 0), Vector3.new(690, 0, 0) }
+	local centers = { Vector3.new(0, 0, 0), Vector3.new(230, 0, 0), Vector3.new(460, 0, 0), Vector3.new(690, 0, 0), Vector3.new(920, 0, 0) }
 	for i = 1, 8 do
 		local model = Instance.new("Model")
 		model.Name = "Seagull"

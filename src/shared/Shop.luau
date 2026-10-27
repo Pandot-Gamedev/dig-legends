@@ -35,6 +35,10 @@ Shop.Cosmetics = {
 -- Free titles earned by playing. The server checks the "rule".
 Shop.EarnedTitles = {
 	{ id = "earned_backyard", kind = "title", name = "Backyard Master", text = "Backyard Master", rule = "zoneBook", zone = "backyard", color = Color3.fromRGB(140, 210, 110) },
+	{ id = "earned_desert", kind = "title", name = "Desert Master", text = "Desert Master", rule = "zoneBook", zone = "desert", color = Color3.fromRGB(240, 190, 90) },
+	{ id = "earned_caves", kind = "title", name = "Crystal Master", text = "Crystal Master", rule = "zoneBook", zone = "caves", color = Color3.fromRGB(180, 130, 255) },
+	{ id = "earned_ruins", kind = "title", name = "Ruins Master", text = "Ruins Master", rule = "zoneBook", zone = "ruins", color = Color3.fromRGB(90, 200, 190) },
+	{ id = "earned_volcano", kind = "title", name = "Volcano Master", text = "Volcano Master", rule = "zoneBook", zone = "volcano", color = Color3.fromRGB(255, 110, 50) },
 	{ id = "earned_legend", kind = "title", name = "Legend Hunter", text = "Legend Hunter", rule = "eventFind", color = Color3.fromRGB(255, 150, 0) },
 	{ id = "earned_reborn", kind = "title", name = "Reborn", text = "Reborn", rule = "rebirth", color = Color3.fromRGB(255, 90, 160) },
 }

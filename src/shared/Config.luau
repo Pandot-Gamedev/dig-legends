@@ -26,7 +26,11 @@ Config.ShinyValueMultiplier = 3
 Config.RebirthBaseCost = 1000000
 Config.RebirthCostGrowth = 3
 Config.RebirthSellBonus = 0.25 -- +25% coins from selling per rebirth
-Config.RebirthRequiresZone = "volcano" -- ignored until that zone exists
+Config.RebirthRequiresZone = "volcano"
+
+-- Every completed Collection page (all regular finds of a zone) adds this much
+-- to the coins you get, forever (rebirths keep the Collection)
+Config.PageSellBonus = 0.05
 
 -- Daily login reward: DailyRewardBase * streak day (streak capped at 7)
 Config.DailyRewardBase = 100
@@ -47,8 +51,9 @@ function Config.RebirthCost(rebirths)
 	return math.floor(Config.RebirthBaseCost * Config.RebirthCostGrowth ^ rebirths)
 end
 
-function Config.SellMultiplier(rebirths)
-	return 1 + Config.RebirthSellBonus * rebirths
+-- pages = completed Collection pages (Finds.CompletedPages)
+function Config.SellMultiplier(rebirths, pages)
+	return 1 + Config.RebirthSellBonus * rebirths + Config.PageSellBonus * (pages or 0)
 end
 
 return Config

@@ -19,14 +19,22 @@ function Bounties.Today(now)
 	return math.floor(now / 86400)
 end
 
--- Makes the day's bounties from the zones the player has unlocked
+-- Makes the day's bounties from the player's two newest unlocked zones, so the
+-- rewards keep up as they progress
 function Bounties.Generate(userId, day, unlockedZones)
 	local random = Random.new(userId % 1000003 * 977 + day)
+	local open = {}
+	for _, zone in ipairs(Zones.List) do
+		if unlockedZones[zone.id] then
+			table.insert(open, zone)
+		end
+	end
+	local recent = { open[#open], open[#open - 1] }
 	local list = {}
 	for _, slot in ipairs(SLOTS) do
 		local pool = {}
-		for _, zone in ipairs(Zones.List) do
-			if unlockedZones[zone.id] then
+		for _, zone in ipairs(recent) do
+			if zone then
 				for _, find in ipairs(Finds.ByZone[zone.id] or {}) do
 					if find.rarity == slot.rarity then
 						table.insert(pool, find)

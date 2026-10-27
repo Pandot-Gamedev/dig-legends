@@ -5,6 +5,7 @@
 local Players = game:GetService("Players")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
 local Finds = require(Shared.Finds)
 local Shop = require(Shared.Shop)
 local Remotes = require(Shared.Remotes)
@@ -150,16 +151,7 @@ end
 
 local function earnedTitleUnlocked(rule, data)
 	if rule.rule == "zoneBook" then
-		local list = Finds.ByZone[rule.zone]
-		if not list then
-			return false
-		end
-		for _, find in ipairs(list) do
-			if not data.book[find.id] then
-				return false
-			end
-		end
-		return true
+		return Finds.IsPageComplete(data.book, rule.zone)
 	elseif rule.rule == "eventFind" then
 		for _, find in ipairs(Finds.EventFinds) do
 			if data.book[find.id] then
@@ -188,6 +180,9 @@ local function checkEarnedTitles(player, data)
 		end
 	end)
 	for _, title in ipairs(newTitles) do
+		if title.rule == "zoneBook" then
+			Remotes.Notify:FireClient(player, string.format("Collection page complete! +%d%% coins forever.", math.floor(Config.PageSellBonus * 100 + 0.5)), "rare")
+		end
 		Remotes.Notify:FireClient(player, "New title unlocked: " .. title.text .. "! Equip it in the Shop.", "rare")
 	end
 end

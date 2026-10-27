@@ -284,6 +284,155 @@ local function lighthouse(folder, position)
 	part({ Name = "LighthouseRoof", Size = Vector3.new(7, 1, 7), Position = position + Vector3.new(0, 45.5, 0), Color = Color3.fromRGB(60, 60, 70), Parent = folder })
 end
 
+-- True when a spot of this size at "at" keeps clear of the dig spots
+local function clearOf(placed, at, radius)
+	for _, spot in ipairs(placed) do
+		if (Vector3.new(at.X, 0, at.Z) - Vector3.new(spot.X, 0, spot.Z)).Magnitude < radius then
+			return false
+		end
+	end
+	return true
+end
+
+local function cactus(folder, position, random)
+	local height = random:NextNumber(6, 10)
+	local green = Color3.fromRGB(70, 140, 70)
+	part({ Name = "Cactus", Shape = Enum.PartType.Cylinder, Size = Vector3.new(height, 1.8, 1.8), CFrame = CFrame.new(position + Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Grass, Color = green, Parent = folder })
+	for _, side in ipairs({ -1, 1 }) do
+		local armY = random:NextNumber(height * 0.4, height * 0.7)
+		part({ Name = "CactusArm", Size = Vector3.new(2, 1.2, 1.2), Position = position + Vector3.new(side * 1.4, armY, 0), Material = Enum.Material.Grass, Color = green, Parent = folder })
+		part({ Name = "CactusArm", Shape = Enum.PartType.Cylinder, Size = Vector3.new(3, 1.2, 1.2), CFrame = CFrame.new(position + Vector3.new(side * 2.2, armY + 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Grass, Color = green, Parent = folder })
+	end
+end
+
+local function pyramid(folder, position, base)
+	local steps = 5
+	for i = 0, steps - 1 do
+		local width = base * (1 - i / steps)
+		part({ Name = "PyramidStep", Size = Vector3.new(width, 2.4, width), Position = position + Vector3.new(0, 1.2 + i * 2.4, 0), Material = Enum.Material.Sandstone, Color = Color3.fromRGB(225, 190, 120), Parent = folder })
+	end
+	part({ Name = "PyramidTop", Size = Vector3.new(2, 1.5, 2), Position = position + Vector3.new(0, steps * 2.4 + 0.75, 0), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 210, 80), Parent = folder })
+end
+
+local function crystal(folder, position, color, random)
+	local first
+	for _ = 1, random:NextInteger(3, 5) do
+		local height = random:NextNumber(3, 8)
+		local width = random:NextNumber(0.8, 1.6)
+		local piece = part({
+			Name = "Crystal",
+			Size = Vector3.new(width, height, width),
+			CFrame = CFrame.new(position + Vector3.new(random:NextNumber(-1.5, 1.5), height * 0.4, random:NextNumber(-1.5, 1.5))) * CFrame.Angles(random:NextNumber(-0.5, 0.5), random:NextNumber(0, math.pi), random:NextNumber(-0.5, 0.5)),
+			Material = Enum.Material.Glass,
+			Color = color,
+			Transparency = 0.2,
+			Parent = folder,
+		})
+		first = first or piece
+	end
+	local glow = Instance.new("PointLight")
+	glow.Color = color
+	glow.Range = 14
+	glow.Brightness = 1.5
+	glow.Parent = first
+end
+
+local function column(folder, position, height, broken, random)
+	local marble = Color3.fromRGB(225, 225, 215)
+	part({ Name = "ColumnBase", Size = Vector3.new(3.2, 0.8, 3.2), Position = position + Vector3.new(0, 0.4, 0), Material = Enum.Material.Marble, Color = marble, Parent = folder })
+	part({ Name = "Column", Shape = Enum.PartType.Cylinder, Size = Vector3.new(height, 2.2, 2.2), CFrame = CFrame.new(position + Vector3.new(0, 0.8 + height / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Marble, Color = marble, Parent = folder })
+	if not broken then
+		part({ Name = "ColumnTop", Size = Vector3.new(3.2, 0.8, 3.2), Position = position + Vector3.new(0, 1.2 + height, 0), Material = Enum.Material.Marble, Color = marble, Parent = folder })
+	else
+		part({ Name = "ColumnPiece", Shape = Enum.PartType.Cylinder, Size = Vector3.new(random:NextNumber(3, 5), 2.2, 2.2), CFrame = CFrame.new(position + Vector3.new(random:NextNumber(2.5, 4), 1.1, random:NextNumber(-2, 2))) * CFrame.Angles(0, random:NextNumber(0, math.pi), 0), Material = Enum.Material.Marble, Color = marble, Parent = folder })
+	end
+end
+
+-- An archway over the path where the bridge reaches an island
+local function arch(folder, position, color, material)
+	for _, z in ipairs({ -6, 6 }) do
+		part({ Name = "ArchPillar", Size = Vector3.new(3, 14, 3), Position = position + Vector3.new(0, 7, z), Material = material, Color = color, Parent = folder })
+	end
+	part({ Name = "ArchTop", Size = Vector3.new(4, 3, 17), Position = position + Vector3.new(0, 15.5, 0), Material = material, Color = color, Parent = folder })
+end
+
+local function lavaPool(folder, position, size)
+	local pool = part({ Name = "LavaPool", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, size, size), CFrame = CFrame.new(position + Vector3.new(0, 0.15, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 100, 20), CanCollide = false, Parent = folder })
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 120, 40)
+	light.Range = size * 1.5
+	light.Brightness = 2
+	light.Parent = pool
+end
+
+-- A smoking volcano out in the sea behind the last island
+local function volcanoMountain(folder, position)
+	for i = 0, 5 do
+		local width = 70 - i * 10
+		part({ Name = "VolcanoSlope", Shape = Enum.PartType.Cylinder, Size = Vector3.new(8, width, width), CFrame = CFrame.new(position + Vector3.new(0, -4 + i * 8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Basalt, Color = Color3.fromRGB(55, 45, 45), Parent = folder })
+	end
+	local crater = part({ Name = "VolcanoCrater", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1, 16, 16), CFrame = CFrame.new(position + Vector3.new(0, 40.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 90, 20), Parent = folder })
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	smoke.Color = ColorSequence.new(Color3.fromRGB(70, 60, 60))
+	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 8), NumberSequenceKeypoint.new(1, 25) })
+	smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+	smoke.Lifetime = NumberRange.new(6, 9)
+	smoke.Speed = NumberRange.new(8, 14)
+	smoke.Rate = 3
+	smoke.EmissionDirection = Enum.NormalId.Right -- the cylinder lies on its side, so +X points up
+	smoke.Parent = crater
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 110, 40)
+	light.Range = 40
+	light.Brightness = 3
+	light.Parent = crater
+end
+
+-- Props that give each zone island its own look, kept away from the dig spots, trees and rocks in placed
+local function decorateZone(folder, zoneId, centerX, placed, random)
+	local function each(count, radius, place)
+		local tries = 0
+		while count > 0 and tries < 200 do
+			tries += 1
+			local at = Vector3.new(centerX + random:NextNumber(-42, 42), GROUND_Y, random:NextNumber(-42, 42))
+			if math.abs(at.Z) > 9 and clearOf(placed, at, radius) then
+				place(at)
+				table.insert(placed, Vector3.new(at.X, 0, at.Z))
+				count -= 1
+			end
+		end
+	end
+	local entrance = Vector3.new(centerX - 45, GROUND_Y, 0) -- the island's west edge, clear of the dig spots
+	if zoneId == "backyard" then
+		shed(folder, Vector3.new(centerX + 30, GROUND_Y, -36), Color3.fromRGB(170, 70, 60))
+		gnome(folder, Vector3.new(centerX - 20, GROUND_Y, 14), Color3.fromRGB(60, 160, 60))
+	elseif zoneId == "desert" then
+		each(1, 12, function(at)
+			pyramid(folder, at, 14)
+		end)
+		each(6, 5, function(at)
+			cactus(folder, at, random)
+		end)
+	elseif zoneId == "caves" then
+		arch(folder, entrance, Color3.fromRGB(80, 70, 100), Enum.Material.Slate)
+		local colors = { Color3.fromRGB(180, 120, 255), Color3.fromRGB(110, 230, 255), Color3.fromRGB(255, 130, 220) }
+		each(7, 6, function(at)
+			crystal(folder, at, colors[random:NextInteger(1, #colors)], random)
+		end)
+	elseif zoneId == "ruins" then
+		arch(folder, entrance, Color3.fromRGB(215, 215, 200), Enum.Material.Marble)
+		each(7, 6, function(at)
+			column(folder, at, random:NextNumber(5, 12), random:NextNumber() < 0.5, random)
+		end)
+	elseif zoneId == "volcano" then
+		each(5, 7, function(at)
+			lavaPool(folder, at, random:NextNumber(4, 7))
+		end)
+		volcanoMountain(folder, Vector3.new(centerX + 95, GROUND_Y, 0))
+	end
+end
+
 -- Where a shopkeeper stands. By default they face +Z (the front of the stalls).
 local function npcSpot(folder, npc, position, turn)
 	local spot = part({ Name = npc .. "Spot", Size = Vector3.new(2, 1, 2), CFrame = CFrame.new(position + Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, turn or math.pi, 0), Transparency = 1, CanCollide = false, CanQuery = false, Parent = folder })
@@ -458,6 +607,7 @@ function MapBuilder.Build()
 			end
 			if clear then
 				tree(scenery, Vector3.new(x, GROUND_Y, z), look.leaves, random)
+				table.insert(zonePlaced, Vector3.new(x, 0, z))
 			end
 		end
 		for _ = 1, 5 do
@@ -470,12 +620,10 @@ function MapBuilder.Build()
 			end
 			if clear then
 				rock(scenery, at, look.rock, random)
+				table.insert(zonePlaced, Vector3.new(at.X, 0, at.Z))
 			end
 		end
-		if zone.id == "backyard" then
-			shed(scenery, Vector3.new(centerX + 30, GROUND_Y, -36), Color3.fromRGB(170, 70, 60))
-			gnome(scenery, Vector3.new(centerX - 20, GROUND_Y, 14), Color3.fromRGB(60, 160, 60))
-		end
+		decorateZone(scenery, zone.id, centerX, zonePlaced, random)
 
 		local zoneSign = part({ Name = "ZoneSign", Size = Vector3.new(24, 6, 1), Position = Vector3.new(centerX, GROUND_Y + 14, -40), Color = Color3.fromRGB(30, 40, 60), Parent = scenery })
 		sign(zoneSign, zone.name, Enum.NormalId.Front, zone.color)
@@ -504,7 +652,7 @@ function MapBuilder.Build()
 				Parent = map,
 			})
 			gate:SetAttribute("ZoneGate", zone.id)
-			local text = zone.name .. "\n" .. Format.Number(zone.price) .. " coins"
+			local text = string.format("%s\nLevel %d\n%s coins", zone.name, zone.level, Format.Number(zone.price))
 			sign(gate, text, Enum.NormalId.Left)
 			sign(gate, text, Enum.NormalId.Right)
 			prompt(gate, "Unlock", zone.name, 14)

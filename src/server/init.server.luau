@@ -25,6 +25,7 @@ DataService.Start()
 -- Test helpers for Roblox Studio only (never in the live game). In the command
 -- bar, with the Server view selected:
 --   game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)
+--   game.ServerStorage.DigLegendsTest:Invoke("xp", 10000)
 if game:GetService("RunService"):IsStudio() then
 	local test = Instance.new("BindableFunction")
 	test.Name = "DigLegendsTest"
@@ -33,6 +34,8 @@ if game:GetService("RunService"):IsStudio() then
 			DataService.Update(player, function(data)
 				if command == "coins" then
 					data.coins += amount
+				elseif command == "xp" then
+					data.xp += amount
 				end
 			end)
 		end

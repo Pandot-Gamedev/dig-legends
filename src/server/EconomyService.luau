@@ -12,6 +12,7 @@ local Shop = require(Shared.Shop)
 local Charms = require(Shared.Charms)
 local Market = require(Shared.Market)
 local Bounties = require(Shared.Bounties)
+local Level = require(Shared.Level)
 local Format = require(Shared.Format)
 local Remotes = require(Shared.Remotes)
 
@@ -68,7 +69,7 @@ function EconomyService.SellAll(player, auto)
 			if find.favorite then
 				table.insert(keep, find)
 			else
-				total += Market.Price(find, saved.rebirths, hot)
+				total += Market.Price(find, saved, hot)
 				sold += 1
 			end
 		end
@@ -103,7 +104,7 @@ function EconomyService.SellFind(player, uidText)
 	if find.favorite then
 		return false, "Unfavorite it first"
 	end
-	local price = Market.Price(find, data.rebirths)
+	local price = Market.Price(find, data)
 	DataService.Update(player, function(saved)
 		table.remove(saved.bag, index)
 		saved.coins += price
@@ -239,7 +240,7 @@ function EconomyService.ClaimBounty(player, indexText)
 	if found < bounty.count then
 		return false, string.format("You need %d %s (favorites don't count)", bounty.count, Finds.ById[bounty.findId].name)
 	end
-	local reward = Bounties.Reward(bounty, Config.SellMultiplier(data.rebirths))
+	local reward = Bounties.Reward(bounty, Market.Multiplier(data))
 	DataService.Update(player, function(saved)
 		local keep = {}
 		for _, find in ipairs(saved.bag) do
@@ -300,6 +301,9 @@ function EconomyService.UnlockZone(player, zoneId)
 	end
 	if data.zones[zone.id] then
 		return true
+	end
+	if Level.FromXp(data.xp) < zone.level then
+		return false, string.format("Reach digger level %d to unlock %s", zone.level, zone.name)
 	end
 	if data.coins < zone.price then
 		return false, string.format("You need %s coins to unlock %s", Format.Number(zone.price), zone.name)
@@ -364,7 +368,7 @@ function EconomyService.Rebirth(player)
 		saved.zones = { [Zones.Default] = true }
 	end)
 	EconomyService.Teleport(player, "hub")
-	notify(player, string.format("Reborn! You now earn +%d%% coins from finds.", math.floor((Config.SellMultiplier(data.rebirths) - 1) * 100 + 0.5)), "success")
+	notify(player, string.format("Reborn! You now earn +%d%% coins from finds.", math.floor((Market.Multiplier(DataService.Get(player)) - 1) * 100 + 0.5)), "success")
 	return true
 end
 
@@ -396,7 +400,7 @@ local function giveDailyReward(player, data)
 	end
 	data.lastDailyDay = today
 	local day = math.min(data.dailyStreak, Config.DailyStreakCap)
-	local reward = math.floor(Config.DailyRewardBase * day * Config.SellMultiplier(data.rebirths))
+	local reward = math.floor(Config.DailyRewardBase * day * Market.Multiplier(data))
 	data.coins += reward
 	data.totalEarned += reward
 	task.spawn(function()

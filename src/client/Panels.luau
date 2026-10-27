@@ -14,6 +14,7 @@ local Events = require(Shared.Events)
 local Charms = require(Shared.Charms)
 local Market = require(Shared.Market)
 local Bounties = require(Shared.Bounties)
+local Level = require(Shared.Level)
 local Format = require(Shared.Format)
 
 local UI = require(script.Parent.UI)
@@ -103,7 +104,7 @@ local function findRows(body, data, selling, startOrder)
 		local card = row(body, 50, startOrder + index)
 		local name = (entry.shiny and "Shiny " or "") .. find.name
 		UI.label(name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(0.5, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
-		local price = Market.Price(entry, data.rebirths, hot)
+		local price = Market.Price(entry, data, hot)
 		local detail = string.format("%s  -  %s  -  %s coins%s", find.rarity, Format.Weight(entry.weight), Format.Number(price), hot[entry.id] and "  (IN DEMAND x2)" or "")
 		UI.label(detail, { Position = UDim2.fromOffset(12, 28), Size = UDim2.new(0.6, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = hot[entry.id] and T.Gold or T.Muted, Parent = card })
 
@@ -163,7 +164,7 @@ local function renderMarket(body)
 	local total, count = 0, 0
 	for _, entry in ipairs(data.bag) do
 		if not entry.favorite then
-			total += Market.Price(entry, data.rebirths, hot)
+			total += Market.Price(entry, data, hot)
 			count += 1
 		end
 	end
@@ -254,7 +255,7 @@ local function renderBounties(body)
 		end
 		local card = row(body, 70, index)
 		UI.label(string.format("Bring %dx %s", bounty.count, find.name), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.62, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
-		local reward = Bounties.Reward(bounty, Config.SellMultiplier(data.rebirths))
+		local reward = Bounties.Reward(bounty, Market.Multiplier(data))
 		local zone = Zones.ById[find.zone]
 		UI.label(string.format("Have %d/%d  -  found in %s  -  reward %s coins + %d %s", math.min(have, bounty.count), bounty.count, zone and zone.name or "", Format.Number(reward), bounty.charmAmount, Charms.ById[bounty.charm].name), {
 			Position = UDim2.fromOffset(12, 36),
@@ -289,9 +290,9 @@ local function renderBook(body)
 	local tabs = UI.new("Frame", { Size = UDim2.new(1, -8, 0, 40), BackgroundTransparency = 1, LayoutOrder = 1, Parent = body }, { UI.list(8, Enum.FillDirection.Horizontal) })
 	local tabList = {}
 	for _, zone in ipairs(Zones.List) do
-		table.insert(tabList, { id = zone.id, name = zone.name, finds = Finds.ByZone[zone.id] or {} })
+		table.insert(tabList, { id = zone.id, name = zone.name, short = zone.short, finds = Finds.ByZone[zone.id] or {} })
 	end
-	table.insert(tabList, { id = "event", name = "Legends", finds = Finds.EventFinds })
+	table.insert(tabList, { id = "event", name = "Weekly Legends", short = "Legends", finds = Finds.EventFinds })
 
 	local found, total = 0, #Finds.List
 	for id in pairs(data.book) do
@@ -305,10 +306,10 @@ local function renderBook(body)
 		if tab.id == bookTab then
 			current = tab
 		end
-		UI.button(tab.name, tab.id == bookTab and T.Accent or T.Card, function()
+		UI.button(tab.short, tab.id == bookTab and T.Accent or T.Card, function()
 			bookTab = tab.id
 			Panels.Book.refresh()
-		end, { Size = UDim2.fromOffset(136, 36), LayoutOrder = index, Parent = tabs })
+		end, { Size = UDim2.new(1 / #tabList, -8, 0, 36), LayoutOrder = index, Parent = tabs })
 	end
 	current = current or tabList[1]
 
@@ -318,7 +319,11 @@ local function renderBook(body)
 			zoneFound += 1
 		end
 	end
-	UI.label(string.format("%s: %d/%d found   (whole collection: %d/%d)", current.name, zoneFound, #current.finds, found, total), {
+	local header = string.format("%s: %d/%d found   (whole collection: %d/%d)", current.name, zoneFound, #current.finds, found, total)
+	if current.id ~= "event" then
+		header ..= Finds.IsPageComplete(data.book, current.id) and "   Page complete!" or string.format("   Complete it: +%d%% coins", math.floor(Config.PageSellBonus * 100 + 0.5))
+	end
+	UI.label(header, {
 		Size = UDim2.new(1, -8, 0, 24),
 		Font = T.BodyFont,
 		TextColor3 = T.Muted,
@@ -512,7 +517,9 @@ local function renderTeleport(body)
 		local card = row(body, 56, index + 1)
 		UI.label(zone.name, { Position = UDim2.fromOffset(12, 14), Size = UDim2.new(0.6, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = zone.color, Parent = card })
 		local props = { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(150, 38), Parent = card }
-		if not data.zones[zone.id] then
+		if not data.zones[zone.id] and Level.FromXp(data.xp) < zone.level then
+			UI.button("Needs Lv " .. zone.level, T.Card, nil, props)
+		elseif not data.zones[zone.id] then
 			UI.button("Unlock " .. Format.Number(zone.price), data.coins >= zone.price and T.Good or T.Bad, function()
 				act("UnlockZone", zone.id)
 			end, props)
@@ -536,8 +543,9 @@ local function renderRebirth(body)
 	end
 	UI.list(10).Parent = body
 	local cost = Config.RebirthCost(data.rebirths)
-	local nowBonus = math.floor((Config.SellMultiplier(data.rebirths) - 1) * 100 + 0.5)
-	local nextBonus = math.floor((Config.SellMultiplier(data.rebirths + 1) - 1) * 100 + 0.5)
+	local pages = Finds.CompletedPages(data.book)
+	local nowBonus = math.floor((Config.SellMultiplier(data.rebirths, pages) - 1) * 100 + 0.5)
+	local nextBonus = math.floor((Config.SellMultiplier(data.rebirths + 1, pages) - 1) * 100 + 0.5)
 	local requiredZone = Zones.ById[Config.RebirthRequiresZone]
 
 	local lines = {

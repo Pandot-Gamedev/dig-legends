@@ -19,14 +19,22 @@ function Bounties.Today(now)
 	return math.floor(now / 86400)
 end
 
--- Makes the day's bounties from the zones the player has unlocked
+-- Makes the day's bounties from the player's two newest unlocked zones, so the
+-- rewards keep up as they progress
 function Bounties.Generate(userId, day, unlockedZones)
 	local random = Random.new(userId % 1000003 * 977 + day)
+	local open = {}
+	for _, zone in ipairs(Zones.List) do
+		if unlockedZones[zone.id] then
+			table.insert(open, zone)
+		end
+	end
+	local recent = { open[#open], open[#open - 1] }
 	local list = {}
 	for _, slot in ipairs(SLOTS) do
 		local pool = {}
-		for _, zone in ipairs(Zones.List) do
-			if unlockedZones[zone.id] then
+		for _, zone in ipairs(recent) do
+			if zone then
 				for _, find in ipairs(Finds.ByZone[zone.id] or {}) do
 					if find.rarity == slot.rarity then
 						table.insert(pool, find)
@@ -154,7 +162,11 @@ Config.ShinyValueMultiplier = 3
 Config.RebirthBaseCost = 1000000
 Config.RebirthCostGrowth = 3
 Config.RebirthSellBonus = 0.25 -- +25% coins from selling per rebirth
-Config.RebirthRequiresZone = "volcano" -- ignored until that zone exists
+Config.RebirthRequiresZone = "volcano"
+
+-- Every completed Collection page (all regular finds of a zone) adds this much
+-- to the coins you get, forever (rebirths keep the Collection)
+Config.PageSellBonus = 0.05
 
 -- Daily login reward: DailyRewardBase * streak day (streak capped at 7)
 Config.DailyRewardBase = 100
@@ -175,8 +187,9 @@ function Config.RebirthCost(rebirths)
 	return math.floor(Config.RebirthBaseCost * Config.RebirthCostGrowth ^ rebirths)
 end
 
-function Config.SellMultiplier(rebirths)
-	return 1 + Config.RebirthSellBonus * rebirths
+-- pages = completed Collection pages (Finds.CompletedPages)
+function Config.SellMultiplier(rebirths, pages)
+	return 1 + Config.RebirthSellBonus * rebirths + Config.PageSellBonus * (pages or 0)
 end
 
 return Config
@@ -499,9 +512,68 @@ Finds.List = {
 	{ id = "mammoth_tooth", name = "Mammoth Tooth", zone = "backyard", rarity = "Epic", value = 240, weight = { 1, 4 }, shape = "tooth", color = Color3.fromRGB(235, 225, 200) },
 	{ id = "time_capsule", name = "Golden Time Capsule", zone = "backyard", rarity = "Legendary", value = 1200, weight = { 2, 6 }, shape = "relic", color = Color3.fromRGB(255, 200, 40) },
 
-	-- Weekly event legendaries (one per week, rotating)
+	-- Desert Dig
+	{ id = "clay_shard", name = "Clay Pot Shard", zone = "desert", rarity = "Common", value = 22, weight = { 0.05, 0.3 }, shape = "relic", color = Color3.fromRGB(190, 110, 70) },
+	{ id = "bleached_bone", name = "Sun-Bleached Bone", zone = "desert", rarity = "Common", value = 24, weight = { 0.1, 0.6 }, shape = "bone", color = Color3.fromRGB(240, 230, 210) },
+	{ id = "desert_rose", name = "Desert Rose", zone = "desert", rarity = "Common", value = 26, weight = { 0.05, 0.4 }, shape = "gem", color = Color3.fromRGB(220, 160, 120) },
+	{ id = "old_canteen", name = "Old Canteen", zone = "desert", rarity = "Common", value = 30, weight = { 0.3, 0.9 }, shape = "relic", color = Color3.fromRGB(120, 130, 90) },
+	{ id = "copper_bracelet", name = "Copper Bracelet", zone = "desert", rarity = "Uncommon", value = 85, weight = { 0.02, 0.1 }, shape = "ring", color = Color3.fromRGB(200, 120, 70) },
+	{ id = "scarab_amulet", name = "Scarab Amulet", zone = "desert", rarity = "Uncommon", value = 95, weight = { 0.02, 0.08 }, shape = "relic", color = Color3.fromRGB(40, 150, 140) },
+	{ id = "raptor_claw", name = "Raptor Claw", zone = "desert", rarity = "Uncommon", value = 105, weight = { 0.1, 0.5 }, shape = "tooth", color = Color3.fromRGB(110, 90, 70) },
+	{ id = "sphinx_figurine", name = "Sphinx Figurine", zone = "desert", rarity = "Rare", value = 280, weight = { 0.5, 2 }, shape = "relic", color = Color3.fromRGB(225, 190, 120) },
+	{ id = "turquoise_nugget", name = "Turquoise Nugget", zone = "desert", rarity = "Rare", value = 300, weight = { 0.05, 0.3 }, shape = "gem", color = Color3.fromRGB(60, 200, 190) },
+	{ id = "raptor_skull", name = "Raptor Skull", zone = "desert", rarity = "Epic", value = 900, weight = { 2, 8 }, shape = "bone", color = Color3.fromRGB(200, 185, 160) },
+	{ id = "golden_ankh", name = "Golden Ankh", zone = "desert", rarity = "Epic", value = 1050, weight = { 0.3, 1.2 }, shape = "relic", color = Color3.fromRGB(255, 205, 60) },
+	{ id = "trex_tooth", name = "Tyrannosaurus Tooth", zone = "desert", rarity = "Legendary", value = 5000, weight = { 1, 5 }, shape = "tooth", color = Color3.fromRGB(235, 220, 190) },
+
+	-- Crystal Caves
+	{ id = "quartz_shard", name = "Quartz Shard", zone = "caves", rarity = "Common", value = 95, weight = { 0.05, 0.4 }, shape = "gem", color = Color3.fromRGB(235, 235, 245) },
+	{ id = "cave_pearl", name = "Cave Pearl", zone = "caves", rarity = "Common", value = 110, weight = { 0.01, 0.05 }, shape = "orb", color = Color3.fromRGB(240, 235, 220) },
+	{ id = "fools_gold", name = "Fool's Gold", zone = "caves", rarity = "Common", value = 120, weight = { 0.1, 0.8 }, shape = "gem", color = Color3.fromRGB(210, 180, 80) },
+	{ id = "rough_geode", name = "Rough Geode", zone = "caves", rarity = "Common", value = 130, weight = { 0.5, 3 }, shape = "orb", color = Color3.fromRGB(130, 120, 110) },
+	{ id = "amethyst_cluster", name = "Amethyst Cluster", zone = "caves", rarity = "Uncommon", value = 380, weight = { 0.2, 1.5 }, shape = "gem", color = Color3.fromRGB(160, 90, 220) },
+	{ id = "glowing_quartz", name = "Glowing Quartz", zone = "caves", rarity = "Uncommon", value = 420, weight = { 0.1, 1 }, shape = "gem", color = Color3.fromRGB(120, 255, 220) },
+	{ id = "cave_bear_tooth", name = "Cave Bear Tooth", zone = "caves", rarity = "Uncommon", value = 450, weight = { 0.05, 0.3 }, shape = "tooth", color = Color3.fromRGB(230, 220, 195) },
+	{ id = "miners_lantern", name = "Old Miner's Lantern", zone = "caves", rarity = "Rare", value = 1100, weight = { 1, 3 }, shape = "relic", color = Color3.fromRGB(160, 120, 60) },
+	{ id = "raw_sapphire", name = "Raw Sapphire", zone = "caves", rarity = "Rare", value = 1300, weight = { 0.02, 0.2 }, shape = "gem", color = Color3.fromRGB(40, 80, 230) },
+	{ id = "crystal_skull", name = "Crystal Skull", zone = "caves", rarity = "Epic", value = 3800, weight = { 1, 4 }, shape = "relic", color = Color3.fromRGB(200, 230, 255) },
+	{ id = "starlight_geode", name = "Starlight Geode", zone = "caves", rarity = "Epic", value = 4200, weight = { 1, 6 }, shape = "orb", color = Color3.fromRGB(70, 50, 140) },
+	{ id = "rainbow_diamond", name = "Rainbow Diamond", zone = "caves", rarity = "Legendary", value = 20000, weight = { 0.01, 0.1 }, shape = "gem", color = Color3.fromRGB(255, 150, 230) },
+
+	-- Sunken Ruins
+	{ id = "mosaic_tile", name = "Mosaic Tile", zone = "ruins", rarity = "Common", value = 380, weight = { 0.1, 0.5 }, shape = "relic", color = Color3.fromRGB(70, 140, 200) },
+	{ id = "bronze_coin", name = "Bronze Coin", zone = "ruins", rarity = "Common", value = 420, weight = { 0.01, 0.03 }, shape = "coin", color = Color3.fromRGB(180, 120, 60) },
+	{ id = "sea_glass", name = "Sea Glass", zone = "ruins", rarity = "Common", value = 450, weight = { 0.01, 0.05 }, shape = "orb", color = Color3.fromRGB(120, 210, 170) },
+	{ id = "conch_shell", name = "Conch Shell", zone = "ruins", rarity = "Common", value = 520, weight = { 0.3, 1.5 }, shape = "shell", color = Color3.fromRGB(250, 190, 170) },
+	{ id = "marble_hand", name = "Marble Statue Hand", zone = "ruins", rarity = "Uncommon", value = 1500, weight = { 2, 8 }, shape = "relic", color = Color3.fromRGB(235, 235, 230) },
+	{ id = "silver_goblet", name = "Silver Goblet", zone = "ruins", rarity = "Uncommon", value = 1650, weight = { 0.3, 1 }, shape = "relic", color = Color3.fromRGB(210, 215, 225) },
+	{ id = "ancient_tablet", name = "Ancient Tablet", zone = "ruins", rarity = "Uncommon", value = 1800, weight = { 3, 12 }, shape = "relic", color = Color3.fromRGB(150, 150, 130) },
+	{ id = "emerald_ring", name = "Emerald Ring", zone = "ruins", rarity = "Rare", value = 4800, weight = { 0.01, 0.05 }, shape = "ring", color = Color3.fromRGB(40, 200, 90) },
+	{ id = "trident_tip", name = "Trident Tip", zone = "ruins", rarity = "Rare", value = 5200, weight = { 1, 4 }, shape = "tooth", color = Color3.fromRGB(200, 170, 80) },
+	{ id = "golden_mask", name = "Golden Mask", zone = "ruins", rarity = "Epic", value = 15000, weight = { 1, 4 }, shape = "relic", color = Color3.fromRGB(255, 200, 50) },
+	{ id = "black_pearl", name = "Black Pearl", zone = "ruins", rarity = "Epic", value = 16000, weight = { 0.01, 0.05 }, shape = "orb", color = Color3.fromRGB(40, 40, 55) },
+	{ id = "atlantis_orb", name = "Orb of Atlantis", zone = "ruins", rarity = "Legendary", value = 80000, weight = { 3, 10 }, shape = "orb", color = Color3.fromRGB(60, 220, 255) },
+
+	-- Volcano Core
+	{ id = "obsidian_shard", name = "Obsidian Shard", zone = "volcano", rarity = "Common", value = 1500, weight = { 0.1, 1 }, shape = "gem", color = Color3.fromRGB(35, 30, 45) },
+	{ id = "lava_rock", name = "Lava Rock", zone = "volcano", rarity = "Common", value = 1700, weight = { 1, 5 }, shape = "orb", color = Color3.fromRGB(90, 50, 40) },
+	{ id = "sulfur_crystal", name = "Sulfur Crystal", zone = "volcano", rarity = "Common", value = 1900, weight = { 0.1, 0.6 }, shape = "gem", color = Color3.fromRGB(240, 220, 60) },
+	{ id = "ash_fossil", name = "Ash Fossil", zone = "volcano", rarity = "Common", value = 2100, weight = { 0.5, 3 }, shape = "shell", color = Color3.fromRGB(120, 115, 110) },
+	{ id = "fire_opal", name = "Fire Opal", zone = "volcano", rarity = "Uncommon", value = 6000, weight = { 0.02, 0.2 }, shape = "gem", color = Color3.fromRGB(255, 120, 60) },
+	{ id = "magma_beetle", name = "Magma Beetle Fossil", zone = "volcano", rarity = "Uncommon", value = 6400, weight = { 0.1, 0.5 }, shape = "shell", color = Color3.fromRGB(200, 60, 30) },
+	{ id = "salamander_bones", name = "Fire Salamander Bones", zone = "volcano", rarity = "Uncommon", value = 7000, weight = { 0.5, 3 }, shape = "bone", color = Color3.fromRGB(230, 160, 120) },
+	{ id = "dragon_scale", name = "Dragon Scale", zone = "volcano", rarity = "Rare", value = 19000, weight = { 0.5, 2 }, shape = "shell", color = Color3.fromRGB(180, 30, 40) },
+	{ id = "ember_ruby", name = "Ember Ruby", zone = "volcano", rarity = "Rare", value = 21000, weight = { 0.02, 0.2 }, shape = "gem", color = Color3.fromRGB(230, 30, 50) },
+	{ id = "golem_heart", name = "Lava Golem Heart", zone = "volcano", rarity = "Epic", value = 58000, weight = { 5, 20 }, shape = "orb", color = Color3.fromRGB(255, 90, 20) },
+	{ id = "fire_diamond", name = "Fire Diamond", zone = "volcano", rarity = "Epic", value = 64000, weight = { 0.05, 0.3 }, shape = "gem", color = Color3.fromRGB(255, 70, 30) },
+	{ id = "dragon_egg", name = "Dragon Egg Fossil", zone = "volcano", rarity = "Legendary", value = 320000, weight = { 10, 40 }, shape = "egg", color = Color3.fromRGB(110, 40, 40) },
+
+	-- Weekly event legendaries (one per week, rotating through the zones)
 	{ id = "pirate_chest", name = "Buried Pirate Chest", zone = "backyard", rarity = "Legendary", value = 3000, weight = { 20, 60 }, shape = "relic", color = Color3.fromRGB(140, 90, 40), event = true },
-	{ id = "meteorite", name = "Meteorite Chunk", zone = "backyard", rarity = "Legendary", value = 3000, weight = { 5, 30 }, shape = "orb", color = Color3.fromRGB(70, 60, 80), event = true },
+	{ id = "meteorite", name = "Meteorite Chunk", zone = "desert", rarity = "Legendary", value = 12000, weight = { 5, 30 }, shape = "orb", color = Color3.fromRGB(70, 60, 80), event = true },
+	{ id = "mountain_heart", name = "Heart of the Mountain", zone = "caves", rarity = "Legendary", value = 50000, weight = { 5, 25 }, shape = "gem", color = Color3.fromRGB(255, 80, 200), event = true },
+	{ id = "sunken_crown", name = "Sunken King's Crown", zone = "ruins", rarity = "Legendary", value = 200000, weight = { 2, 6 }, shape = "ring", color = Color3.fromRGB(255, 215, 80), event = true },
+	{ id = "phoenix_feather", name = "Phoenix Feather", zone = "volcano", rarity = "Legendary", value = 800000, weight = { 0.1, 0.5 }, shape = "relic", color = Color3.fromRGB(255, 160, 40), event = true },
 }
 
 Finds.ById = {}
@@ -516,6 +588,30 @@ for _, find in ipairs(Finds.List) do
 		Finds.ByZone[find.zone] = Finds.ByZone[find.zone] or {}
 		table.insert(Finds.ByZone[find.zone], find)
 	end
+end
+
+-- Zones whose regular finds are all in the Collection
+function Finds.IsPageComplete(book, zoneId)
+	local list = Finds.ByZone[zoneId]
+	if not list then
+		return false
+	end
+	for _, find in ipairs(list) do
+		if not book[find.id] then
+			return false
+		end
+	end
+	return true
+end
+
+function Finds.CompletedPages(book)
+	local pages = 0
+	for zoneId in pairs(Finds.ByZone) do
+		if Finds.IsPageComplete(book, zoneId) then
+			pages += 1
+		end
+	end
+	return pages
 end
 
 return Finds
@@ -647,10 +743,15 @@ function Market.HotFinds(now)
 	return hot, secondsLeft
 end
 
--- Coins for one find from the backpack, right now
-function Market.Price(entry, rebirths, hot)
+-- A player's coin multiplier: rebirths plus completed Collection pages
+function Market.Multiplier(data)
+	return Config.SellMultiplier(data.rebirths, Finds.CompletedPages(data.book))
+end
+
+-- Coins for one find from this player's backpack, right now
+function Market.Price(entry, data, hot)
 	hot = hot or Market.HotFinds()
-	local price = entry.value * Config.SellMultiplier(rebirths)
+	local price = entry.value * Market.Multiplier(data)
 	if hot[entry.id] then
 		price *= Market.HotMultiplier
 	end
@@ -752,6 +853,10 @@ Shop.Cosmetics = {
 -- Free titles earned by playing. The server checks the "rule".
 Shop.EarnedTitles = {
 	{ id = "earned_backyard", kind = "title", name = "Backyard Master", text = "Backyard Master", rule = "zoneBook", zone = "backyard", color = Color3.fromRGB(140, 210, 110) },
+	{ id = "earned_desert", kind = "title", name = "Desert Master", text = "Desert Master", rule = "zoneBook", zone = "desert", color = Color3.fromRGB(240, 190, 90) },
+	{ id = "earned_caves", kind = "title", name = "Crystal Master", text = "Crystal Master", rule = "zoneBook", zone = "caves", color = Color3.fromRGB(180, 130, 255) },
+	{ id = "earned_ruins", kind = "title", name = "Ruins Master", text = "Ruins Master", rule = "zoneBook", zone = "ruins", color = Color3.fromRGB(90, 200, 190) },
+	{ id = "earned_volcano", kind = "title", name = "Volcano Master", text = "Volcano Master", rule = "zoneBook", zone = "volcano", color = Color3.fromRGB(255, 110, 50) },
 	{ id = "earned_legend", kind = "title", name = "Legend Hunter", text = "Legend Hunter", rule = "eventFind", color = Color3.fromRGB(255, 150, 0) },
 	{ id = "earned_reborn", kind = "title", name = "Reborn", text = "Reborn", rule = "rebirth", color = Color3.fromRGB(255, 90, 160) },
 }
@@ -818,12 +923,17 @@ Tutorial.RewardCoins = 250
 Tutorial.RewardCharm = { id = "clover", amount = 10 }
 
 return Tutorial
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Zones</string><ProtectedString name="Source"><![CDATA[-- Digging zones. Zones are unlocked with in-game coins.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Zones</string><ProtectedString name="Source"><![CDATA[-- Digging zones, in the order you reach them. A zone needs a digger level and
+-- in-game coins to unlock. short = name on the Collection tabs.
 
 local Zones = {}
 
 Zones.List = {
-	{ id = "backyard", name = "Backyard", price = 0, color = Color3.fromRGB(140, 210, 110) },
+	{ id = "backyard", name = "Backyard", short = "Backyard", level = 1, price = 0, color = Color3.fromRGB(140, 210, 110) },
+	{ id = "desert", name = "Desert Dig", short = "Desert", level = 5, price = 2500, color = Color3.fromRGB(240, 190, 90) },
+	{ id = "caves", name = "Crystal Caves", short = "Caves", level = 12, price = 20000, color = Color3.fromRGB(180, 130, 255) },
+	{ id = "ruins", name = "Sunken Ruins", short = "Ruins", level = 20, price = 120000, color = Color3.fromRGB(90, 200, 190) },
+	{ id = "volcano", name = "Volcano Core", short = "Volcano", level = 30, price = 700000, color = Color3.fromRGB(255, 110, 50) },
 }
 
 Zones.ById = {}
@@ -862,6 +972,7 @@ DataService.Start()
 -- Test helpers for Roblox Studio only (never in the live game). In the command
 -- bar, with the Server view selected:
 --   game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)
+--   game.ServerStorage.DigLegendsTest:Invoke("xp", 10000)
 if game:GetService("RunService"):IsStudio() then
 	local test = Instance.new("BindableFunction")
 	test.Name = "DigLegendsTest"
@@ -870,6 +981,8 @@ if game:GetService("RunService"):IsStudio() then
 			DataService.Update(player, function(data)
 				if command == "coins" then
 					data.coins += amount
+				elseif command == "xp" then
+					data.xp += amount
 				end
 			end)
 		end
@@ -886,6 +999,7 @@ print("[Dig Legends] Server ready")
 local Players = game:GetService("Players")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
 local Finds = require(Shared.Finds)
 local Shop = require(Shared.Shop)
 local Remotes = require(Shared.Remotes)
@@ -1031,16 +1145,7 @@ end
 
 local function earnedTitleUnlocked(rule, data)
 	if rule.rule == "zoneBook" then
-		local list = Finds.ByZone[rule.zone]
-		if not list then
-			return false
-		end
-		for _, find in ipairs(list) do
-			if not data.book[find.id] then
-				return false
-			end
-		end
-		return true
+		return Finds.IsPageComplete(data.book, rule.zone)
 	elseif rule.rule == "eventFind" then
 		for _, find in ipairs(Finds.EventFinds) do
 			if data.book[find.id] then
@@ -1069,6 +1174,9 @@ local function checkEarnedTitles(player, data)
 		end
 	end)
 	for _, title in ipairs(newTitles) do
+		if title.rule == "zoneBook" then
+			Remotes.Notify:FireClient(player, string.format("Collection page complete! +%d%% coins forever.", math.floor(Config.PageSellBonus * 100 + 0.5)), "rare")
+		end
 		Remotes.Notify:FireClient(player, "New title unlocked: " .. title.text .. "! Equip it in the Shop.", "rare")
 	end
 end
@@ -1957,6 +2065,7 @@ local Shop = require(Shared.Shop)
 local Charms = require(Shared.Charms)
 local Market = require(Shared.Market)
 local Bounties = require(Shared.Bounties)
+local Level = require(Shared.Level)
 local Format = require(Shared.Format)
 local Remotes = require(Shared.Remotes)
 
@@ -2013,7 +2122,7 @@ function EconomyService.SellAll(player, auto)
 			if find.favorite then
 				table.insert(keep, find)
 			else
-				total += Market.Price(find, saved.rebirths, hot)
+				total += Market.Price(find, saved, hot)
 				sold += 1
 			end
 		end
@@ -2048,7 +2157,7 @@ function EconomyService.SellFind(player, uidText)
 	if find.favorite then
 		return false, "Unfavorite it first"
 	end
-	local price = Market.Price(find, data.rebirths)
+	local price = Market.Price(find, data)
 	DataService.Update(player, function(saved)
 		table.remove(saved.bag, index)
 		saved.coins += price
@@ -2184,7 +2293,7 @@ function EconomyService.ClaimBounty(player, indexText)
 	if found < bounty.count then
 		return false, string.format("You need %d %s (favorites don't count)", bounty.count, Finds.ById[bounty.findId].name)
 	end
-	local reward = Bounties.Reward(bounty, Config.SellMultiplier(data.rebirths))
+	local reward = Bounties.Reward(bounty, Market.Multiplier(data))
 	DataService.Update(player, function(saved)
 		local keep = {}
 		for _, find in ipairs(saved.bag) do
@@ -2245,6 +2354,9 @@ function EconomyService.UnlockZone(player, zoneId)
 	end
 	if data.zones[zone.id] then
 		return true
+	end
+	if Level.FromXp(data.xp) < zone.level then
+		return false, string.format("Reach digger level %d to unlock %s", zone.level, zone.name)
 	end
 	if data.coins < zone.price then
 		return false, string.format("You need %s coins to unlock %s", Format.Number(zone.price), zone.name)
@@ -2309,7 +2421,7 @@ function EconomyService.Rebirth(player)
 		saved.zones = { [Zones.Default] = true }
 	end)
 	EconomyService.Teleport(player, "hub")
-	notify(player, string.format("Reborn! You now earn +%d%% coins from finds.", math.floor((Config.SellMultiplier(data.rebirths) - 1) * 100 + 0.5)), "success")
+	notify(player, string.format("Reborn! You now earn +%d%% coins from finds.", math.floor((Market.Multiplier(DataService.Get(player)) - 1) * 100 + 0.5)), "success")
 	return true
 end
 
@@ -2341,7 +2453,7 @@ local function giveDailyReward(player, data)
 	end
 	data.lastDailyDay = today
 	local day = math.min(data.dailyStreak, Config.DailyStreakCap)
-	local reward = math.floor(Config.DailyRewardBase * day * Config.SellMultiplier(data.rebirths))
+	local reward = math.floor(Config.DailyRewardBase * day * Market.Multiplier(data))
 	data.coins += reward
 	data.totalEarned += reward
 	task.spawn(function()
@@ -2694,6 +2806,155 @@ local function lighthouse(folder, position)
 	part({ Name = "LighthouseRoof", Size = Vector3.new(7, 1, 7), Position = position + Vector3.new(0, 45.5, 0), Color = Color3.fromRGB(60, 60, 70), Parent = folder })
 end
 
+-- True when a spot of this size at "at" keeps clear of the dig spots
+local function clearOf(placed, at, radius)
+	for _, spot in ipairs(placed) do
+		if (Vector3.new(at.X, 0, at.Z) - Vector3.new(spot.X, 0, spot.Z)).Magnitude < radius then
+			return false
+		end
+	end
+	return true
+end
+
+local function cactus(folder, position, random)
+	local height = random:NextNumber(6, 10)
+	local green = Color3.fromRGB(70, 140, 70)
+	part({ Name = "Cactus", Shape = Enum.PartType.Cylinder, Size = Vector3.new(height, 1.8, 1.8), CFrame = CFrame.new(position + Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Grass, Color = green, Parent = folder })
+	for _, side in ipairs({ -1, 1 }) do
+		local armY = random:NextNumber(height * 0.4, height * 0.7)
+		part({ Name = "CactusArm", Size = Vector3.new(2, 1.2, 1.2), Position = position + Vector3.new(side * 1.4, armY, 0), Material = Enum.Material.Grass, Color = green, Parent = folder })
+		part({ Name = "CactusArm", Shape = Enum.PartType.Cylinder, Size = Vector3.new(3, 1.2, 1.2), CFrame = CFrame.new(position + Vector3.new(side * 2.2, armY + 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Grass, Color = green, Parent = folder })
+	end
+end
+
+local function pyramid(folder, position, base)
+	local steps = 5
+	for i = 0, steps - 1 do
+		local width = base * (1 - i / steps)
+		part({ Name = "PyramidStep", Size = Vector3.new(width, 2.4, width), Position = position + Vector3.new(0, 1.2 + i * 2.4, 0), Material = Enum.Material.Sandstone, Color = Color3.fromRGB(225, 190, 120), Parent = folder })
+	end
+	part({ Name = "PyramidTop", Size = Vector3.new(2, 1.5, 2), Position = position + Vector3.new(0, steps * 2.4 + 0.75, 0), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 210, 80), Parent = folder })
+end
+
+local function crystal(folder, position, color, random)
+	local first
+	for _ = 1, random:NextInteger(3, 5) do
+		local height = random:NextNumber(3, 8)
+		local width = random:NextNumber(0.8, 1.6)
+		local piece = part({
+			Name = "Crystal",
+			Size = Vector3.new(width, height, width),
+			CFrame = CFrame.new(position + Vector3.new(random:NextNumber(-1.5, 1.5), height * 0.4, random:NextNumber(-1.5, 1.5))) * CFrame.Angles(random:NextNumber(-0.5, 0.5), random:NextNumber(0, math.pi), random:NextNumber(-0.5, 0.5)),
+			Material = Enum.Material.Glass,
+			Color = color,
+			Transparency = 0.2,
+			Parent = folder,
+		})
+		first = first or piece
+	end
+	local glow = Instance.new("PointLight")
+	glow.Color = color
+	glow.Range = 14
+	glow.Brightness = 1.5
+	glow.Parent = first
+end
+
+local function column(folder, position, height, broken, random)
+	local marble = Color3.fromRGB(225, 225, 215)
+	part({ Name = "ColumnBase", Size = Vector3.new(3.2, 0.8, 3.2), Position = position + Vector3.new(0, 0.4, 0), Material = Enum.Material.Marble, Color = marble, Parent = folder })
+	part({ Name = "Column", Shape = Enum.PartType.Cylinder, Size = Vector3.new(height, 2.2, 2.2), CFrame = CFrame.new(position + Vector3.new(0, 0.8 + height / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Marble, Color = marble, Parent = folder })
+	if not broken then
+		part({ Name = "ColumnTop", Size = Vector3.new(3.2, 0.8, 3.2), Position = position + Vector3.new(0, 1.2 + height, 0), Material = Enum.Material.Marble, Color = marble, Parent = folder })
+	else
+		part({ Name = "ColumnPiece", Shape = Enum.PartType.Cylinder, Size = Vector3.new(random:NextNumber(3, 5), 2.2, 2.2), CFrame = CFrame.new(position + Vector3.new(random:NextNumber(2.5, 4), 1.1, random:NextNumber(-2, 2))) * CFrame.Angles(0, random:NextNumber(0, math.pi), 0), Material = Enum.Material.Marble, Color = marble, Parent = folder })
+	end
+end
+
+-- An archway over the path where the bridge reaches an island
+local function arch(folder, position, color, material)
+	for _, z in ipairs({ -6, 6 }) do
+		part({ Name = "ArchPillar", Size = Vector3.new(3, 14, 3), Position = position + Vector3.new(0, 7, z), Material = material, Color = color, Parent = folder })
+	end
+	part({ Name = "ArchTop", Size = Vector3.new(4, 3, 17), Position = position + Vector3.new(0, 15.5, 0), Material = material, Color = color, Parent = folder })
+end
+
+local function lavaPool(folder, position, size)
+	local pool = part({ Name = "LavaPool", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, size, size), CFrame = CFrame.new(position + Vector3.new(0, 0.15, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 100, 20), CanCollide = false, Parent = folder })
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 120, 40)
+	light.Range = size * 1.5
+	light.Brightness = 2
+	light.Parent = pool
+end
+
+-- A smoking volcano out in the sea behind the last island
+local function volcanoMountain(folder, position)
+	for i = 0, 5 do
+		local width = 70 - i * 10
+		part({ Name = "VolcanoSlope", Shape = Enum.PartType.Cylinder, Size = Vector3.new(8, width, width), CFrame = CFrame.new(position + Vector3.new(0, -4 + i * 8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Basalt, Color = Color3.fromRGB(55, 45, 45), Parent = folder })
+	end
+	local crater = part({ Name = "VolcanoCrater", Shape = Enum.PartType.Cylinder, Size = Vector3.new(1, 16, 16), CFrame = CFrame.new(position + Vector3.new(0, 40.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 90, 20), Parent = folder })
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	smoke.Color = ColorSequence.new(Color3.fromRGB(70, 60, 60))
+	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 8), NumberSequenceKeypoint.new(1, 25) })
+	smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+	smoke.Lifetime = NumberRange.new(6, 9)
+	smoke.Speed = NumberRange.new(8, 14)
+	smoke.Rate = 3
+	smoke.EmissionDirection = Enum.NormalId.Right -- the cylinder lies on its side, so +X points up
+	smoke.Parent = crater
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 110, 40)
+	light.Range = 40
+	light.Brightness = 3
+	light.Parent = crater
+end
+
+-- Props that give each zone island its own look, kept away from the dig spots, trees and rocks in placed
+local function decorateZone(folder, zoneId, centerX, placed, random)
+	local function each(count, radius, place)
+		local tries = 0
+		while count > 0 and tries < 200 do
+			tries += 1
+			local at = Vector3.new(centerX + random:NextNumber(-42, 42), GROUND_Y, random:NextNumber(-42, 42))
+			if math.abs(at.Z) > 9 and clearOf(placed, at, radius) then
+				place(at)
+				table.insert(placed, Vector3.new(at.X, 0, at.Z))
+				count -= 1
+			end
+		end
+	end
+	local entrance = Vector3.new(centerX - 45, GROUND_Y, 0) -- the island's west edge, clear of the dig spots
+	if zoneId == "backyard" then
+		shed(folder, Vector3.new(centerX + 30, GROUND_Y, -36), Color3.fromRGB(170, 70, 60))
+		gnome(folder, Vector3.new(centerX - 20, GROUND_Y, 14), Color3.fromRGB(60, 160, 60))
+	elseif zoneId == "desert" then
+		each(1, 12, function(at)
+			pyramid(folder, at, 14)
+		end)
+		each(6, 5, function(at)
+			cactus(folder, at, random)
+		end)
+	elseif zoneId == "caves" then
+		arch(folder, entrance, Color3.fromRGB(80, 70, 100), Enum.Material.Slate)
+		local colors = { Color3.fromRGB(180, 120, 255), Color3.fromRGB(110, 230, 255), Color3.fromRGB(255, 130, 220) }
+		each(7, 6, function(at)
+			crystal(folder, at, colors[random:NextInteger(1, #colors)], random)
+		end)
+	elseif zoneId == "ruins" then
+		arch(folder, entrance, Color3.fromRGB(215, 215, 200), Enum.Material.Marble)
+		each(7, 6, function(at)
+			column(folder, at, random:NextNumber(5, 12), random:NextNumber() < 0.5, random)
+		end)
+	elseif zoneId == "volcano" then
+		each(5, 7, function(at)
+			lavaPool(folder, at, random:NextNumber(4, 7))
+		end)
+		volcanoMountain(folder, Vector3.new(centerX + 95, GROUND_Y, 0))
+	end
+end
+
 -- Where a shopkeeper stands. By default they face +Z (the front of the stalls).
 local function npcSpot(folder, npc, position, turn)
 	local spot = part({ Name = npc .. "Spot", Size = Vector3.new(2, 1, 2), CFrame = CFrame.new(position + Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, turn or math.pi, 0), Transparency = 1, CanCollide = false, CanQuery = false, Parent = folder })
@@ -2868,6 +3129,7 @@ function MapBuilder.Build()
 			end
 			if clear then
 				tree(scenery, Vector3.new(x, GROUND_Y, z), look.leaves, random)
+				table.insert(zonePlaced, Vector3.new(x, 0, z))
 			end
 		end
 		for _ = 1, 5 do
@@ -2880,12 +3142,10 @@ function MapBuilder.Build()
 			end
 			if clear then
 				rock(scenery, at, look.rock, random)
+				table.insert(zonePlaced, Vector3.new(at.X, 0, at.Z))
 			end
 		end
-		if zone.id == "backyard" then
-			shed(scenery, Vector3.new(centerX + 30, GROUND_Y, -36), Color3.fromRGB(170, 70, 60))
-			gnome(scenery, Vector3.new(centerX - 20, GROUND_Y, 14), Color3.fromRGB(60, 160, 60))
-		end
+		decorateZone(scenery, zone.id, centerX, zonePlaced, random)
 
 		local zoneSign = part({ Name = "ZoneSign", Size = Vector3.new(24, 6, 1), Position = Vector3.new(centerX, GROUND_Y + 14, -40), Color = Color3.fromRGB(30, 40, 60), Parent = scenery })
 		sign(zoneSign, zone.name, Enum.NormalId.Front, zone.color)
@@ -2914,7 +3174,7 @@ function MapBuilder.Build()
 				Parent = map,
 			})
 			gate:SetAttribute("ZoneGate", zone.id)
-			local text = zone.name .. "\n" .. Format.Number(zone.price) .. " coins"
+			local text = string.format("%s\nLevel %d\n%s coins", zone.name, zone.level, Format.Number(zone.price))
 			sign(gate, text, Enum.NormalId.Left)
 			sign(gate, text, Enum.NormalId.Right)
 			prompt(gate, "Unlock", zone.name, 14)
@@ -4372,6 +4632,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Market = require(Shared.Market)
 local Zones = require(Shared.Zones)
 local Events = require(Shared.Events)
 local Charms = require(Shared.Charms)
@@ -4417,8 +4678,9 @@ function Hud.Init(screenGui)
 		local charm = Charms.ById[data.charms.equipped] or Charms.ById[Charms.Default]
 		charmLine.Text = charm.free and "Charm: none" or string.format("Charm: %s x%d", charm.name, data.charms.owned[charm.id] or 0)
 		charmLine.TextColor3 = charm.color
-		if data.rebirths > 0 then
-			bonus.Text = string.format("Rebirth %d: +%d%% coins", data.rebirths, math.floor((Config.SellMultiplier(data.rebirths) - 1) * 100 + 0.5))
+		local extra = math.floor((Market.Multiplier(data) - 1) * 100 + 0.5)
+		if extra > 0 then
+			bonus.Text = string.format("Coin bonus: +%d%%", extra)
 		else
 			bonus.Text = "Sell finds at the Trading Post"
 		end
@@ -4585,6 +4847,7 @@ local Events = require(Shared.Events)
 local Charms = require(Shared.Charms)
 local Market = require(Shared.Market)
 local Bounties = require(Shared.Bounties)
+local Level = require(Shared.Level)
 local Format = require(Shared.Format)
 
 local UI = require(script.Parent.UI)
@@ -4674,7 +4937,7 @@ local function findRows(body, data, selling, startOrder)
 		local card = row(body, 50, startOrder + index)
 		local name = (entry.shiny and "Shiny " or "") .. find.name
 		UI.label(name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(0.5, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
-		local price = Market.Price(entry, data.rebirths, hot)
+		local price = Market.Price(entry, data, hot)
 		local detail = string.format("%s  -  %s  -  %s coins%s", find.rarity, Format.Weight(entry.weight), Format.Number(price), hot[entry.id] and "  (IN DEMAND x2)" or "")
 		UI.label(detail, { Position = UDim2.fromOffset(12, 28), Size = UDim2.new(0.6, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = hot[entry.id] and T.Gold or T.Muted, Parent = card })
 
@@ -4734,7 +4997,7 @@ local function renderMarket(body)
 	local total, count = 0, 0
 	for _, entry in ipairs(data.bag) do
 		if not entry.favorite then
-			total += Market.Price(entry, data.rebirths, hot)
+			total += Market.Price(entry, data, hot)
 			count += 1
 		end
 	end
@@ -4825,7 +5088,7 @@ local function renderBounties(body)
 		end
 		local card = row(body, 70, index)
 		UI.label(string.format("Bring %dx %s", bounty.count, find.name), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.62, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
-		local reward = Bounties.Reward(bounty, Config.SellMultiplier(data.rebirths))
+		local reward = Bounties.Reward(bounty, Market.Multiplier(data))
 		local zone = Zones.ById[find.zone]
 		UI.label(string.format("Have %d/%d  -  found in %s  -  reward %s coins + %d %s", math.min(have, bounty.count), bounty.count, zone and zone.name or "", Format.Number(reward), bounty.charmAmount, Charms.ById[bounty.charm].name), {
 			Position = UDim2.fromOffset(12, 36),
@@ -4860,9 +5123,9 @@ local function renderBook(body)
 	local tabs = UI.new("Frame", { Size = UDim2.new(1, -8, 0, 40), BackgroundTransparency = 1, LayoutOrder = 1, Parent = body }, { UI.list(8, Enum.FillDirection.Horizontal) })
 	local tabList = {}
 	for _, zone in ipairs(Zones.List) do
-		table.insert(tabList, { id = zone.id, name = zone.name, finds = Finds.ByZone[zone.id] or {} })
+		table.insert(tabList, { id = zone.id, name = zone.name, short = zone.short, finds = Finds.ByZone[zone.id] or {} })
 	end
-	table.insert(tabList, { id = "event", name = "Legends", finds = Finds.EventFinds })
+	table.insert(tabList, { id = "event", name = "Weekly Legends", short = "Legends", finds = Finds.EventFinds })
 
 	local found, total = 0, #Finds.List
 	for id in pairs(data.book) do
@@ -4876,10 +5139,10 @@ local function renderBook(body)
 		if tab.id == bookTab then
 			current = tab
 		end
-		UI.button(tab.name, tab.id == bookTab and T.Accent or T.Card, function()
+		UI.button(tab.short, tab.id == bookTab and T.Accent or T.Card, function()
 			bookTab = tab.id
 			Panels.Book.refresh()
-		end, { Size = UDim2.fromOffset(136, 36), LayoutOrder = index, Parent = tabs })
+		end, { Size = UDim2.new(1 / #tabList, -8, 0, 36), LayoutOrder = index, Parent = tabs })
 	end
 	current = current or tabList[1]
 
@@ -4889,7 +5152,11 @@ local function renderBook(body)
 			zoneFound += 1
 		end
 	end
-	UI.label(string.format("%s: %d/%d found   (whole collection: %d/%d)", current.name, zoneFound, #current.finds, found, total), {
+	local header = string.format("%s: %d/%d found   (whole collection: %d/%d)", current.name, zoneFound, #current.finds, found, total)
+	if current.id ~= "event" then
+		header ..= Finds.IsPageComplete(data.book, current.id) and "   Page complete!" or string.format("   Complete it: +%d%% coins", math.floor(Config.PageSellBonus * 100 + 0.5))
+	end
+	UI.label(header, {
 		Size = UDim2.new(1, -8, 0, 24),
 		Font = T.BodyFont,
 		TextColor3 = T.Muted,
@@ -5083,7 +5350,9 @@ local function renderTeleport(body)
 		local card = row(body, 56, index + 1)
 		UI.label(zone.name, { Position = UDim2.fromOffset(12, 14), Size = UDim2.new(0.6, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = zone.color, Parent = card })
 		local props = { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(150, 38), Parent = card }
-		if not data.zones[zone.id] then
+		if not data.zones[zone.id] and Level.FromXp(data.xp) < zone.level then
+			UI.button("Needs Lv " .. zone.level, T.Card, nil, props)
+		elseif not data.zones[zone.id] then
 			UI.button("Unlock " .. Format.Number(zone.price), data.coins >= zone.price and T.Good or T.Bad, function()
 				act("UnlockZone", zone.id)
 			end, props)
@@ -5107,8 +5376,9 @@ local function renderRebirth(body)
 	end
 	UI.list(10).Parent = body
 	local cost = Config.RebirthCost(data.rebirths)
-	local nowBonus = math.floor((Config.SellMultiplier(data.rebirths) - 1) * 100 + 0.5)
-	local nextBonus = math.floor((Config.SellMultiplier(data.rebirths + 1) - 1) * 100 + 0.5)
+	local pages = Finds.CompletedPages(data.book)
+	local nowBonus = math.floor((Config.SellMultiplier(data.rebirths, pages) - 1) * 100 + 0.5)
+	local nextBonus = math.floor((Config.SellMultiplier(data.rebirths + 1, pages) - 1) * 100 + 0.5)
 	local requiredZone = Zones.ById[Config.RebirthRequiresZone]
 
 	local lines = {
@@ -5477,7 +5747,7 @@ end
 -- Seagulls circling over the islands
 local function seagulls()
 	local birds = {}
-	local centers = { Vector3.new(0, 0, 0), Vector3.new(230, 0, 0), Vector3.new(460, 0, 0), Vector3.new(690, 0, 0) }
+	local centers = { Vector3.new(0, 0, 0), Vector3.new(230, 0, 0), Vector3.new(460, 0, 0), Vector3.new(690, 0, 0), Vector3.new(920, 0, 0) }
 	for i = 1, 8 do
 		local model = Instance.new("Model")
 		model.Name = "Seagull"
