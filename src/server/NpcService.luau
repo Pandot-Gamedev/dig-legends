@@ -1,4 +1,4 @@
--- Shopkeepers and Old Pete. They stand on parts with an "Npc" attribute
+-- Shopkeepers and Grandpa Gus. They stand on parts with an "Npc" attribute
 -- (MapBuilder places them at each stall) and face the way that part faces.
 
 local Players = game:GetService("Players")
@@ -9,10 +9,10 @@ local NpcService = {}
 local SKIN = Color3.fromRGB(234, 184, 146)
 
 local LOOKS = {
-	OldPete = { name = "Old Pete", role = "Bounties", shirt = Color3.fromRGB(40, 60, 110), pants = Color3.fromRGB(90, 70, 50), hat = Color3.fromRGB(240, 200, 60), beard = true },
-	Marina = { name = "Marina", role = "Fish Market", shirt = Color3.fromRGB(40, 160, 170), pants = Color3.fromRGB(50, 50, 70), hat = Color3.fromRGB(210, 60, 60) },
-	TackleTom = { name = "Tackle Tom", role = "Bait & Tackle", shirt = Color3.fromRGB(90, 150, 70), pants = Color3.fromRGB(70, 60, 50), hat = Color3.fromRGB(60, 90, 50) },
-	Rodney = { name = "Rodney", role = "Rod Shop", shirt = Color3.fromRGB(220, 120, 50), pants = Color3.fromRGB(60, 60, 60), hat = Color3.fromRGB(30, 30, 30) },
+	Gus = { name = "Grandpa Gus", role = "Bounties", shirt = Color3.fromRGB(150, 110, 60), pants = Color3.fromRGB(80, 70, 50), hat = Color3.fromRGB(200, 170, 110), beard = true },
+	Ruby = { name = "Ruby", role = "Trading Post", shirt = Color3.fromRGB(200, 50, 70), pants = Color3.fromRGB(50, 50, 70), hat = Color3.fromRGB(240, 200, 60) },
+	Clover = { name = "Clover", role = "Charm Cart", shirt = Color3.fromRGB(90, 170, 80), pants = Color3.fromRGB(70, 60, 50), hat = Color3.fromRGB(60, 120, 50) },
+	Digby = { name = "Digby", role = "Shovel Shop", shirt = Color3.fromRGB(220, 140, 40), pants = Color3.fromRGB(60, 60, 60), hat = Color3.fromRGB(250, 210, 40) },
 }
 
 local function accessory(model, head, name, size, offset, color, shape)

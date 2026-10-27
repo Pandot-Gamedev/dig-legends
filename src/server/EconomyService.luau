@@ -1,15 +1,15 @@
--- Coins: the Fish Market, bait, bounties, rods, zones, rebirths and daily
+-- Coins: the Trading Post, charms, bounties, shovels, zones, rebirths and daily
 -- rewards, plus the menu buttons players press (all go through the "Action" remote).
 
 local Workspace = game:GetService("Workspace")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
-local Fish = require(Shared.Fish)
-local Rods = require(Shared.Rods)
+local Finds = require(Shared.Finds)
+local Shovels = require(Shared.Shovels)
 local Zones = require(Shared.Zones)
 local Shop = require(Shared.Shop)
-local Bait = require(Shared.Bait)
+local Charms = require(Shared.Charms)
 local Market = require(Shared.Market)
 local Bounties = require(Shared.Bounties)
 local Format = require(Shared.Format)
@@ -25,7 +25,7 @@ local function notify(player, text, kind)
 	Remotes.Notify:FireClient(player, text, kind)
 end
 
--- True if the player stands near a station (market, bait shop). Maps without
+-- True if the player stands near a station (Trading Post, Charm Cart). Maps without
 -- that station don't require it.
 local function nearStation(player, station)
 	local character = player.Character
@@ -43,15 +43,15 @@ local function nearStation(player, station)
 end
 
 local function findInBag(data, uid)
-	for index, fish in ipairs(data.bag) do
-		if fish.uid == uid then
-			return index, fish
+	for index, find in ipairs(data.bag) do
+		if find.uid == uid then
+			return index, find
 		end
 	end
 	return nil
 end
 
--- Sells every fish that isn't marked as a favorite.
+-- Sells every find that isn't marked as a favorite.
 -- auto = true for the Auto Sell pass (works anywhere).
 function EconomyService.SellAll(player, auto)
 	local data = DataService.Get(player)
@@ -59,16 +59,16 @@ function EconomyService.SellAll(player, auto)
 		return false, "Still loading"
 	end
 	if not auto and not nearStation(player, "Sell") then
-		return false, "Sell fish at the Fish Market"
+		return false, "Sell finds at the Trading Post"
 	end
-	local hot = Market.HotFish()
+	local hot = Market.HotFinds()
 	local count, earned = DataService.Update(player, function(saved)
 		local keep, total, sold = {}, 0, 0
-		for _, fish in ipairs(saved.bag) do
-			if fish.favorite then
-				table.insert(keep, fish)
+		for _, find in ipairs(saved.bag) do
+			if find.favorite then
+				table.insert(keep, find)
 			else
-				total += Market.Price(fish, saved.rebirths, hot)
+				total += Market.Price(find, saved.rebirths, hot)
 				sold += 1
 			end
 		end
@@ -80,36 +80,36 @@ function EconomyService.SellAll(player, auto)
 	if count == 0 then
 		return false, "Nothing to sell (favorites are never sold)"
 	end
-	notify(player, string.format("Sold %d fish for %s coins", count, Format.Number(earned)), "coins")
+	notify(player, string.format("Sold %d finds for %s coins", count, Format.Number(earned)), "coins")
 	if not auto then
 		TutorialService.Event(player, "Sell")
 	end
 	return true
 end
 
-function EconomyService.SellFish(player, uidText)
+function EconomyService.SellFind(player, uidText)
 	local data = DataService.Get(player)
 	local uid = tonumber(uidText)
 	if not data or not uid then
-		return false, "Unknown fish"
+		return false, "Unknown find"
 	end
 	if not nearStation(player, "Sell") then
-		return false, "Sell fish at the Fish Market"
+		return false, "Sell finds at the Trading Post"
 	end
-	local index, fish = findInBag(data, uid)
+	local index, find = findInBag(data, uid)
 	if not index then
-		return false, "That fish is gone"
+		return false, "That find is gone"
 	end
-	if fish.favorite then
+	if find.favorite then
 		return false, "Unfavorite it first"
 	end
-	local price = Market.Price(fish, data.rebirths)
+	local price = Market.Price(find, data.rebirths)
 	DataService.Update(player, function(saved)
 		table.remove(saved.bag, index)
 		saved.coins += price
 		saved.totalEarned += price
 	end)
-	notify(player, string.format("Sold %s for %s coins", Fish.ById[fish.id].name, Format.Number(price)), "coins")
+	notify(player, string.format("Sold %s for %s coins", Finds.ById[find.id].name, Format.Number(price)), "coins")
 	TutorialService.Event(player, "Sell")
 	return true
 end
@@ -118,7 +118,7 @@ function EconomyService.ToggleFavorite(player, uidText)
 	local data = DataService.Get(player)
 	local index = data and findInBag(data, tonumber(uidText))
 	if not index then
-		return false, "That fish is gone"
+		return false, "That find is gone"
 	end
 	DataService.Update(player, function(saved)
 		saved.bag[index].favorite = not saved.bag[index].favorite or nil
@@ -126,49 +126,49 @@ function EconomyService.ToggleFavorite(player, uidText)
 	return true
 end
 
-function EconomyService.EquipBait(player, baitId)
-	local bait = Bait.ById[baitId]
+function EconomyService.EquipCharm(player, charmId)
+	local charm = Charms.ById[charmId]
 	local data = DataService.Get(player)
-	if not bait or not data then
-		return false, "Unknown bait"
+	if not charm or not data then
+		return false, "Unknown charm"
 	end
-	if not bait.free and (data.bait.owned[bait.id] or 0) <= 0 then
-		return false, "You don't have any " .. bait.name
+	if not charm.free and (data.charms.owned[charm.id] or 0) <= 0 then
+		return false, "You don't have any " .. charm.name
 	end
 	DataService.Update(player, function(saved)
-		saved.bait.equipped = bait.id
+		saved.charms.equipped = charm.id
 	end)
 	return true
 end
 
-function EconomyService.BuyBait(player, baitId)
-	local bait = Bait.ById[baitId]
+function EconomyService.BuyCharm(player, charmId)
+	local charm = Charms.ById[charmId]
 	local data = DataService.Get(player)
-	if not bait or not data or not bait.price then
+	if not charm or not data or not charm.price then
 		return false, "You can't buy that"
 	end
-	if not nearStation(player, "Bait") then
-		return false, "Buy bait at the Bait & Tackle shop"
+	if not nearStation(player, "Charms") then
+		return false, "Buy charms at the Charm Cart"
 	end
-	if data.coins < bait.price then
+	if data.coins < charm.price then
 		return false, "Not enough coins"
 	end
 	DataService.Update(player, function(saved)
-		saved.coins -= bait.price
-		saved.bait.owned[bait.id] = (saved.bait.owned[bait.id] or 0) + bait.buyAmount
+		saved.coins -= charm.price
+		saved.charms.owned[charm.id] = (saved.charms.owned[charm.id] or 0) + charm.buyAmount
 	end)
-	notify(player, string.format("+%d %s", bait.buyAmount, bait.name), "success")
+	notify(player, string.format("+%d %s", charm.buyAmount, charm.name), "success")
 	return true
 end
 
--- Which bag fish a recipe would use: the cheapest non-favorite fish of each rarity
+-- Which backpack finds a recipe would use: the cheapest non-favorite finds of each rarity
 local function pickIngredients(data, recipe)
 	local used = {}
 	for _, need in ipairs(recipe) do
 		local candidates = {}
-		for _, fish in ipairs(data.bag) do
-			if not fish.favorite and not used[fish.uid] and Fish.ById[fish.id].rarity == need.rarity then
-				table.insert(candidates, fish)
+		for _, find in ipairs(data.bag) do
+			if not find.favorite and not used[find.uid] and Finds.ById[find.id].rarity == need.rarity then
+				table.insert(candidates, find)
 			end
 		end
 		if #candidates < need.count then
@@ -185,30 +185,30 @@ local function pickIngredients(data, recipe)
 end
 EconomyService.PickIngredients = pickIngredients
 
-function EconomyService.CraftBait(player, baitId)
-	local bait = Bait.ById[baitId]
+function EconomyService.CraftCharm(player, charmId)
+	local charm = Charms.ById[charmId]
 	local data = DataService.Get(player)
-	if not bait or not data or not bait.recipe then
+	if not charm or not data or not charm.recipe then
 		return false, "You can't make that"
 	end
-	if not nearStation(player, "Bait") then
-		return false, "Make bait at the Bait & Tackle shop"
+	if not nearStation(player, "Charms") then
+		return false, "Make charms at the Charm Cart"
 	end
-	local used = pickIngredients(data, bait.recipe)
+	local used = pickIngredients(data, charm.recipe)
 	if not used then
-		return false, "You don't have the fish for that (favorites are never used)"
+		return false, "You don't have the finds for that (favorites are never used)"
 	end
 	DataService.Update(player, function(saved)
 		local keep = {}
-		for _, fish in ipairs(saved.bag) do
-			if not used[fish.uid] then
-				table.insert(keep, fish)
+		for _, find in ipairs(saved.bag) do
+			if not used[find.uid] then
+				table.insert(keep, find)
 			end
 		end
 		saved.bag = keep
-		saved.bait.owned[bait.id] = (saved.bait.owned[bait.id] or 0) + bait.craftAmount
+		saved.charms.owned[charm.id] = (saved.charms.owned[charm.id] or 0) + charm.craftAmount
 	end)
-	notify(player, string.format("Made %d %s", bait.craftAmount, bait.name), "success")
+	notify(player, string.format("Made %d %s", charm.craftAmount, charm.name), "success")
 	return true
 end
 
@@ -230,64 +230,64 @@ function EconomyService.ClaimBounty(player, indexText)
 		return false, "That bounty is gone"
 	end
 	local chosen, found = {}, 0
-	for _, fish in ipairs(data.bag) do
-		if fish.id == bounty.fishId and not fish.favorite and found < bounty.count then
-			chosen[fish.uid] = true
+	for _, find in ipairs(data.bag) do
+		if find.id == bounty.findId and not find.favorite and found < bounty.count then
+			chosen[find.uid] = true
 			found += 1
 		end
 	end
 	if found < bounty.count then
-		return false, string.format("You need %d %s (favorites don't count)", bounty.count, Fish.ById[bounty.fishId].name)
+		return false, string.format("You need %d %s (favorites don't count)", bounty.count, Finds.ById[bounty.findId].name)
 	end
 	local reward = Bounties.Reward(bounty, Config.SellMultiplier(data.rebirths))
 	DataService.Update(player, function(saved)
 		local keep = {}
-		for _, fish in ipairs(saved.bag) do
-			if not chosen[fish.uid] then
-				table.insert(keep, fish)
+		for _, find in ipairs(saved.bag) do
+			if not chosen[find.uid] then
+				table.insert(keep, find)
 			end
 		end
 		saved.bag = keep
 		saved.coins += reward
 		saved.totalEarned += reward
-		saved.bait.owned[bounty.bait] = (saved.bait.owned[bounty.bait] or 0) + bounty.baitAmount
+		saved.charms.owned[bounty.charm] = (saved.charms.owned[bounty.charm] or 0) + bounty.charmAmount
 		saved.bounties.list[index].done = true
 	end)
-	notify(player, string.format("Bounty done! +%s coins, +%d %s", Format.Number(reward), bounty.baitAmount, Bait.ById[bounty.bait].name), "coins")
+	notify(player, string.format("Bounty done! +%s coins, +%d %s", Format.Number(reward), bounty.charmAmount, Charms.ById[bounty.charm].name), "coins")
 	return true
 end
 
-function EconomyService.BuyRod(player, rodId)
-	local rod = Rods.ById[rodId]
+function EconomyService.BuyShovel(player, shovelId)
+	local shovel = Shovels.ById[shovelId]
 	local data = DataService.Get(player)
-	if not rod or not data then
-		return false, "Unknown rod"
+	if not shovel or not data then
+		return false, "Unknown shovel"
 	end
-	if data.rodsOwned[rod.id] then
-		return EconomyService.EquipRod(player, rodId)
+	if data.shovelsOwned[shovel.id] then
+		return EconomyService.EquipShovel(player, shovelId)
 	end
-	if rod.requiresRebirths and data.rebirths < rod.requiresRebirths then
-		return false, string.format("Needs %d rebirth(s)", rod.requiresRebirths)
+	if shovel.requiresRebirths and data.rebirths < shovel.requiresRebirths then
+		return false, string.format("Needs %d rebirth(s)", shovel.requiresRebirths)
 	end
-	if data.coins < rod.price then
+	if data.coins < shovel.price then
 		return false, "Not enough coins"
 	end
 	DataService.Update(player, function(saved)
-		saved.coins -= rod.price
-		saved.rodsOwned[rod.id] = true
-		saved.equippedRod = rod.id
+		saved.coins -= shovel.price
+		saved.shovelsOwned[shovel.id] = true
+		saved.equippedShovel = shovel.id
 	end)
-	notify(player, "You bought the " .. rod.name .. "!", "success")
+	notify(player, "You bought the " .. shovel.name .. "!", "success")
 	return true
 end
 
-function EconomyService.EquipRod(player, rodId)
+function EconomyService.EquipShovel(player, shovelId)
 	local data = DataService.Get(player)
-	if not data or not data.rodsOwned[rodId] then
-		return false, "You don't own that rod"
+	if not data or not data.shovelsOwned[shovelId] then
+		return false, "You don't own that shovel"
 	end
 	DataService.Update(player, function(saved)
-		saved.equippedRod = rodId
+		saved.equippedShovel = shovelId
 	end)
 	return true
 end
@@ -349,22 +349,22 @@ function EconomyService.Rebirth(player)
 		return false, string.format("You need %s coins to rebirth", Format.Number(cost))
 	end
 	DataService.Update(player, function(saved)
-		-- Keep: fish book, favorite fish, bait, cosmetics, titles, stats. Reset: coins, rods, zones, other fish.
+		-- Keep: collection book, favorite finds, charms, cosmetics, titles, stats. Reset: coins, shovels, zones, other finds.
 		saved.rebirths += 1
 		saved.coins = 0
 		local favorites = {}
-		for _, fish in ipairs(saved.bag) do
-			if fish.favorite then
-				table.insert(favorites, fish)
+		for _, find in ipairs(saved.bag) do
+			if find.favorite then
+				table.insert(favorites, find)
 			end
 		end
 		saved.bag = favorites
-		saved.rodsOwned = { [Rods.Default] = true }
-		saved.equippedRod = Rods.Default
+		saved.shovelsOwned = { [Shovels.Default] = true }
+		saved.equippedShovel = Shovels.Default
 		saved.zones = { [Zones.Default] = true }
 	end)
 	EconomyService.Teleport(player, "hub")
-	notify(player, string.format("Reborn! You now earn +%d%% coins from fish.", math.floor((Config.SellMultiplier(data.rebirths) - 1) * 100 + 0.5)), "success")
+	notify(player, string.format("Reborn! You now earn +%d%% coins from finds.", math.floor((Config.SellMultiplier(data.rebirths) - 1) * 100 + 0.5)), "success")
 	return true
 end
 
@@ -410,14 +410,14 @@ local actions = {
 	SellAll = function(player)
 		return EconomyService.SellAll(player, false)
 	end,
-	SellFish = EconomyService.SellFish,
+	SellFind = EconomyService.SellFind,
 	ToggleFavorite = EconomyService.ToggleFavorite,
-	EquipBait = EconomyService.EquipBait,
-	BuyBait = EconomyService.BuyBait,
-	CraftBait = EconomyService.CraftBait,
+	EquipCharm = EconomyService.EquipCharm,
+	BuyCharm = EconomyService.BuyCharm,
+	CraftCharm = EconomyService.CraftCharm,
 	ClaimBounty = EconomyService.ClaimBounty,
-	BuyRod = EconomyService.BuyRod,
-	EquipRod = EconomyService.EquipRod,
+	BuyShovel = EconomyService.BuyShovel,
+	EquipShovel = EconomyService.EquipShovel,
 	UnlockZone = EconomyService.UnlockZone,
 	Teleport = EconomyService.Teleport,
 	Rebirth = EconomyService.Rebirth,

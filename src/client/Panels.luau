@@ -1,4 +1,4 @@
--- The menus: Bag, Fish Market, Bait & Tackle, Bounties, Fish Book, Rods,
+-- The menus: Backpack, Trading Post, Charm Cart, Bounties, Collection, Shovels,
 -- Shop, Travel and Rebirth.
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -6,12 +6,12 @@ local Players = game:GetService("Players")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
-local Fish = require(Shared.Fish)
-local Rods = require(Shared.Rods)
+local Finds = require(Shared.Finds)
+local Shovels = require(Shared.Shovels)
 local Zones = require(Shared.Zones)
 local Shop = require(Shared.Shop)
 local Events = require(Shared.Events)
-local Bait = require(Shared.Bait)
+local Charms = require(Shared.Charms)
 local Market = require(Shared.Market)
 local Bounties = require(Shared.Bounties)
 local Format = require(Shared.Format)
@@ -71,7 +71,7 @@ local function heading(parent, text, order)
 	UI.label(text, { Size = UDim2.new(1, -8, 0, 30), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.Gold, LayoutOrder = order, Parent = parent })
 end
 
------------------------------------------------------------------- Bag and Fish Market
+------------------------------------------------------------------ Backpack and Trading Post
 local function sortedBag(data)
 	local list = table.clone(data.bag)
 	table.sort(list, function(a, b)
@@ -83,28 +83,28 @@ end
 local function hotNames(hot)
 	local names = {}
 	for id in pairs(hot) do
-		table.insert(names, Fish.ById[id].name)
+		table.insert(names, Finds.ById[id].name)
 	end
 	table.sort(names)
 	return table.concat(names, ", ")
 end
 
--- One row per fish. selling = true shows Sell buttons (Fish Market only).
-local function fishRows(body, data, selling, startOrder)
-	local hot = Market.HotFish()
+-- One row per find. selling = true shows Sell buttons (Trading Post only).
+local function findRows(body, data, selling, startOrder)
+	local hot = Market.HotFinds()
 	local bag = sortedBag(data)
 	if #bag == 0 then
-		UI.label("Your bag is empty. Go catch some fish!", { Size = UDim2.new(1, -8, 0, 26), Font = T.BodyFont, TextColor3 = T.Muted, LayoutOrder = startOrder, Parent = body })
+		UI.label("Your backpack is empty. Go dig something up!", { Size = UDim2.new(1, -8, 0, 26), Font = T.BodyFont, TextColor3 = T.Muted, LayoutOrder = startOrder, Parent = body })
 		return
 	end
 	for index, entry in ipairs(bag) do
-		local fish = Fish.ById[entry.id]
-		local rarity = Fish.RarityById[fish.rarity]
+		local find = Finds.ById[entry.id]
+		local rarity = Finds.RarityById[find.rarity]
 		local card = row(body, 50, startOrder + index)
-		local name = (entry.shiny and "Shiny " or "") .. fish.name
+		local name = (entry.shiny and "Shiny " or "") .. find.name
 		UI.label(name, { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(0.5, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
 		local price = Market.Price(entry, data.rebirths, hot)
-		local detail = string.format("%s  -  %s  -  %s coins%s", fish.rarity, Format.Weight(entry.weight), Format.Number(price), hot[entry.id] and "  (IN DEMAND x2)" or "")
+		local detail = string.format("%s  -  %s  -  %s coins%s", find.rarity, Format.Weight(entry.weight), Format.Number(price), hot[entry.id] and "  (IN DEMAND x2)" or "")
 		UI.label(detail, { Position = UDim2.fromOffset(12, 28), Size = UDim2.new(0.6, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = hot[entry.id] and T.Gold or T.Muted, Parent = card })
 
 		local uid = tostring(entry.uid)
@@ -113,7 +113,7 @@ local function fishRows(body, data, selling, startOrder)
 		end, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, selling and -112 or -12, 0.5, 0), Size = UDim2.fromOffset(96, 34), Parent = card })
 		if selling then
 			UI.button("Sell", entry.favorite and T.Card or T.Good, function()
-				act("SellFish", uid)
+				act("SellFind", uid)
 			end, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(90, 34), Parent = card })
 		end
 	end
@@ -126,20 +126,20 @@ local function renderBag(body)
 	end
 	UI.list(8).Parent = body
 	local size = State.runtime.bagSize or Config.BagSize
-	heading(body, string.format("Fish (%d/%d)", #data.bag, size), 1)
-	UI.label("Favorites are never sold, used for bait or turned in. Sell at the Fish Market.", { Size = UDim2.new(1, -8, 0, 20), Font = T.BodyFont, TextColor3 = T.Muted, LayoutOrder = 2, Parent = body })
-	fishRows(body, data, false, 10)
+	heading(body, string.format("Finds (%d/%d)", #data.bag, size), 1)
+	UI.label("Favorites are never sold, used for charms or turned in. Sell at the Trading Post.", { Size = UDim2.new(1, -8, 0, 20), Font = T.BodyFont, TextColor3 = T.Muted, LayoutOrder = 2, Parent = body })
+	findRows(body, data, false, 10)
 
-	heading(body, "Bait (goes on your hook)", 1000)
-	for index, bait in ipairs(Bait.List) do
-		local count = bait.free and math.huge or (data.bait.owned[bait.id] or 0)
+	heading(body, "Charms (one is used up each dig)", 1000)
+	for index, charm in ipairs(Charms.List) do
+		local count = charm.free and math.huge or (data.charms.owned[charm.id] or 0)
 		if count > 0 then
 			local card = row(body, 50, 1000 + index)
-			UI.label(bait.name .. (bait.free and "" or ("  x" .. count)), { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(0.6, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = bait.color, Parent = card })
-			UI.label(bait.description, { Position = UDim2.fromOffset(12, 28), Size = UDim2.new(0.7, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = T.Muted, Parent = card })
-			local equipped = data.bait.equipped == bait.id
-			UI.button(equipped and "On hook" or "Use", equipped and T.Card or T.Accent, function()
-				act("EquipBait", bait.id)
+			UI.label(charm.name .. (charm.free and "" or ("  x" .. count)), { Position = UDim2.fromOffset(12, 4), Size = UDim2.new(0.6, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = charm.color, Parent = card })
+			UI.label(charm.description, { Position = UDim2.fromOffset(12, 28), Size = UDim2.new(0.7, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = T.Muted, Parent = card })
+			local equipped = data.charms.equipped == charm.id
+			UI.button(equipped and "In use" or "Use", equipped and T.Card or T.Accent, function()
+				act("EquipCharm", charm.id)
 			end, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(110, 34), Parent = card })
 		end
 	end
@@ -151,7 +151,7 @@ local function renderMarket(body)
 		return
 	end
 	UI.list(8).Parent = body
-	local hot, left = Market.HotFish()
+	local hot, left = Market.HotFinds()
 	UI.label(string.format("In demand (sells for x2) for %s: %s", Format.Duration(left), hotNames(hot)), {
 		Size = UDim2.new(1, -8, 0, 40),
 		TextWrapped = true,
@@ -170,57 +170,57 @@ local function renderMarket(body)
 	UI.button(string.format("Sell all %d for %s coins (keeps favorites)", count, Format.Number(total)), count > 0 and T.Good or T.Card, function()
 		act("SellAll")
 	end, { Size = UDim2.new(1, -8, 0, 44), LayoutOrder = 2, Parent = body })
-	UI.label("Tip: keep fish that are about to be in demand, or trade them for bait and bounties.", { Size = UDim2.new(1, -8, 0, 18), Font = T.BodyFont, TextColor3 = T.Muted, LayoutOrder = 3, Parent = body })
-	fishRows(body, data, true, 10)
+	UI.label("Tip: keep finds that are about to be in demand, or trade them for charms and bounties.", { Size = UDim2.new(1, -8, 0, 18), Font = T.BodyFont, TextColor3 = T.Muted, LayoutOrder = 3, Parent = body })
+	findRows(body, data, true, 10)
 end
 
------------------------------------------------------------------- Bait & Tackle
-local function fishCountByRarity(data)
+------------------------------------------------------------------ Charm Cart
+local function findCountByRarity(data)
 	local counts = {}
 	for _, entry in ipairs(data.bag) do
 		if not entry.favorite then
-			local rarity = Fish.ById[entry.id].rarity
+			local rarity = Finds.ById[entry.id].rarity
 			counts[rarity] = (counts[rarity] or 0) + 1
 		end
 	end
 	return counts
 end
 
-local function renderBait(body)
+local function renderCharms(body)
 	local data = State.data
 	if not data then
 		return
 	end
 	UI.list(8).Parent = body
-	local counts = fishCountByRarity(data)
-	UI.label("Better bait = better fish. A fish that bites eats the bait, even if it gets away.", { Size = UDim2.new(1, -8, 0, 20), Font = T.BodyFont, TextColor3 = T.Muted, LayoutOrder = 0, Parent = body })
-	for index, bait in ipairs(Bait.List) do
-		if not bait.free then
-			local owned = data.bait.owned[bait.id] or 0
+	local counts = findCountByRarity(data)
+	UI.label("Charms bring luck. One is used up each time you find something, even if it breaks.", { Size = UDim2.new(1, -8, 0, 20), Font = T.BodyFont, TextColor3 = T.Muted, LayoutOrder = 0, Parent = body })
+	for index, charm in ipairs(Charms.List) do
+		if not charm.free then
+			local owned = data.charms.owned[charm.id] or 0
 			local card = row(body, 96, index)
-			UI.label(string.format("%s  (you have %d)", bait.name, owned), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.45, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = bait.color, Parent = card })
-			UI.label(bait.description, { Position = UDim2.fromOffset(12, 32), Size = UDim2.new(0.45, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = T.Muted, Parent = card })
-			if bait.recipe then
+			UI.label(string.format("%s  (you have %d)", charm.name, owned), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.45, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = charm.color, Parent = card })
+			UI.label(charm.description, { Position = UDim2.fromOffset(12, 32), Size = UDim2.new(0.45, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = T.Muted, Parent = card })
+			if charm.recipe then
 				local parts, canCraft = {}, true
-				for _, need in ipairs(bait.recipe) do
+				for _, need in ipairs(charm.recipe) do
 					local have = counts[need.rarity] or 0
 					canCraft = canCraft and have >= need.count
 					table.insert(parts, string.format("%d %s (have %d)", need.count, need.rarity, have))
 				end
-				UI.label(string.format("Make %d from: %s", bait.craftAmount, table.concat(parts, " + ")), { Position = UDim2.fromOffset(12, 54), Size = UDim2.new(0.62, 0, 0, 34), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = T.Text, Parent = card })
+				UI.label(string.format("Make %d from: %s", charm.craftAmount, table.concat(parts, " + ")), { Position = UDim2.fromOffset(12, 54), Size = UDim2.new(0.62, 0, 0, 34), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = T.Text, Parent = card })
 				UI.button("Make", canCraft and T.Good or T.Card, function()
-					act("CraftBait", bait.id)
+					act("CraftCharm", charm.id)
 				end, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 52), Size = UDim2.fromOffset(150, 34), Parent = card })
 			end
-			if bait.price then
-				UI.button(string.format("Buy %d: %s", bait.buyAmount, Format.Number(bait.price)), data.coins >= bait.price and T.Accent or T.Card, function()
-					act("BuyBait", bait.id)
+			if charm.price then
+				UI.button(string.format("Buy %d: %s", charm.buyAmount, Format.Number(charm.price)), data.coins >= charm.price and T.Accent or T.Card, function()
+					act("BuyCharm", charm.id)
 				end, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 10), Size = UDim2.fromOffset(150, 34), Parent = card })
 			end
 			if owned > 0 then
-				local equipped = data.bait.equipped == bait.id
-				UI.button(equipped and "On hook" or "Use", equipped and T.Card or T.Accent, function()
-					act("EquipBait", bait.id)
+				local equipped = data.charms.equipped == charm.id
+				UI.button(equipped and "In use" or "Use", equipped and T.Card or T.Accent, function()
+					act("EquipCharm", charm.id)
 				end, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -170, 0, 10), Size = UDim2.fromOffset(90, 34), Parent = card })
 			end
 		end
@@ -236,7 +236,7 @@ local function renderBounties(body)
 	UI.list(8).Parent = body
 	local now = os.time()
 	local resetIn = 86400 - (now % 86400)
-	UI.label(string.format("Old Pete pays %dx the market price, plus bait. New bounties in %s.", Bounties.RewardMultiplier, Format.Duration(resetIn)), {
+	UI.label(string.format("Grandpa Gus pays %dx the Trading Post price, plus charms. New bounties in %s.", Bounties.RewardMultiplier, Format.Duration(resetIn)), {
 		Size = UDim2.new(1, -8, 0, 22),
 		Font = T.BodyFont,
 		TextColor3 = T.Muted,
@@ -244,19 +244,19 @@ local function renderBounties(body)
 		Parent = body,
 	})
 	for index, bounty in ipairs(data.bounties.list) do
-		local fish = Fish.ById[bounty.fishId]
-		local rarity = Fish.RarityById[fish.rarity]
+		local find = Finds.ById[bounty.findId]
+		local rarity = Finds.RarityById[find.rarity]
 		local have = 0
 		for _, entry in ipairs(data.bag) do
-			if entry.id == bounty.fishId and not entry.favorite then
+			if entry.id == bounty.findId and not entry.favorite then
 				have += 1
 			end
 		end
 		local card = row(body, 70, index)
-		UI.label(string.format("Bring %d %s", bounty.count, fish.name), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.62, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
+		UI.label(string.format("Bring %d %s", bounty.count, find.name), { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.62, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarity.color, Parent = card })
 		local reward = Bounties.Reward(bounty, Config.SellMultiplier(data.rebirths))
-		local zone = Zones.ById[fish.zone]
-		UI.label(string.format("Have %d/%d  -  found in %s  -  reward %s coins + %d %s", math.min(have, bounty.count), bounty.count, zone and zone.name or "", Format.Number(reward), bounty.baitAmount, Bait.ById[bounty.bait].name), {
+		local zone = Zones.ById[find.zone]
+		UI.label(string.format("Have %d/%d  -  found in %s  -  reward %s coins + %d %s", math.min(have, bounty.count), bounty.count, zone and zone.name or "", Format.Number(reward), bounty.charmAmount, Charms.ById[bounty.charm].name), {
 			Position = UDim2.fromOffset(12, 36),
 			Size = UDim2.new(0.68, 0, 0, 28),
 			TextWrapped = true,
@@ -276,7 +276,7 @@ local function renderBounties(body)
 	end
 end
 
------------------------------------------------------------------- Fish Book
+------------------------------------------------------------------ Collection
 local bookTab = Zones.List[1].id
 
 local function renderBook(body)
@@ -289,13 +289,13 @@ local function renderBook(body)
 	local tabs = UI.new("Frame", { Size = UDim2.new(1, -8, 0, 40), BackgroundTransparency = 1, LayoutOrder = 1, Parent = body }, { UI.list(8, Enum.FillDirection.Horizontal) })
 	local tabList = {}
 	for _, zone in ipairs(Zones.List) do
-		table.insert(tabList, { id = zone.id, name = zone.name, fish = Fish.ByZone[zone.id] or {} })
+		table.insert(tabList, { id = zone.id, name = zone.name, finds = Finds.ByZone[zone.id] or {} })
 	end
-	table.insert(tabList, { id = "event", name = "Legends", fish = Fish.EventFish })
+	table.insert(tabList, { id = "event", name = "Legends", finds = Finds.EventFinds })
 
-	local found, total = 0, #Fish.List
+	local found, total = 0, #Finds.List
 	for id in pairs(data.book) do
-		if Fish.ById[id] then
+		if Finds.ById[id] then
 			found += 1
 		end
 	end
@@ -313,12 +313,12 @@ local function renderBook(body)
 	current = current or tabList[1]
 
 	local zoneFound = 0
-	for _, fish in ipairs(current.fish) do
-		if data.book[fish.id] then
+	for _, find in ipairs(current.finds) do
+		if data.book[find.id] then
 			zoneFound += 1
 		end
 	end
-	UI.label(string.format("%s: %d/%d found   (whole book: %d/%d)", current.name, zoneFound, #current.fish, found, total), {
+	UI.label(string.format("%s: %d/%d found   (whole collection: %d/%d)", current.name, zoneFound, #current.finds, found, total), {
 		Size = UDim2.new(1, -8, 0, 24),
 		Font = T.BodyFont,
 		TextColor3 = T.Muted,
@@ -330,13 +330,13 @@ local function renderBook(body)
 		UI.new("UIGridLayout", { CellSize = UDim2.fromOffset(134, 112), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 
-	for index, fish in ipairs(current.fish) do
-		local entry = data.book[fish.id]
-		local rarity = Fish.RarityById[fish.rarity]
+	for index, find in ipairs(current.finds) do
+		local entry = data.book[find.id]
+		local rarity = Finds.RarityById[find.rarity]
 		local card = UI.new("Frame", { BackgroundColor3 = T.Card, LayoutOrder = index, Parent = grid }, { UI.corner(10), UI.stroke(rarity.color, 2), UI.padding(6), UI.list(2) })
-		UI.label(entry and fish.name or "???", { Size = UDim2.new(1, 0, 0, 34), TextWrapped = true, Parent = card })
-		UI.label(fish.rarity, { Size = UDim2.new(1, 0, 0, 18), TextColor3 = rarity.color, Parent = card })
-		local detail = "Not caught yet"
+		UI.label(entry and find.name or "???", { Size = UDim2.new(1, 0, 0, 34), TextWrapped = true, Parent = card })
+		UI.label(find.rarity, { Size = UDim2.new(1, 0, 0, 18), TextColor3 = rarity.color, Parent = card })
+		local detail = "Not found yet"
 		if entry then
 			detail = string.format("x%d  best %s", entry.count, Format.Weight(entry.best))
 			if entry.shiny > 0 then
@@ -347,9 +347,9 @@ local function renderBook(body)
 	end
 
 	if current.id == "event" then
-		local eventFish, left = Events.GetEventFish()
-		local zone = Zones.ById[eventFish.zone]
-		UI.label(string.format("This week: %s in %s (ends in %s)", eventFish.name, zone and zone.name or "", Format.Duration(left)), {
+		local eventFind, left = Events.GetEventFind()
+		local zone = Zones.ById[eventFind.zone]
+		UI.label(string.format("This week: %s in %s (ends in %s)", eventFind.name, zone and zone.name or "", Format.Duration(left)), {
 			Size = UDim2.new(1, -8, 0, 24),
 			Font = T.BodyFont,
 			TextColor3 = T.Gold,
@@ -359,34 +359,34 @@ local function renderBook(body)
 	end
 end
 
------------------------------------------------------------------- Rods
-local function renderRods(body)
+------------------------------------------------------------------ Shovels
+local function renderShovels(body)
 	local data = State.data
 	if not data then
 		return
 	end
 	UI.list(8).Parent = body
-	for index, rod in ipairs(Rods.List) do
+	for index, shovel in ipairs(Shovels.List) do
 		local card = row(body, 64, index)
-		UI.label(rod.name, { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.6, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rod.color:Lerp(Color3.new(1, 1, 1), 0.4), Parent = card })
-		local stats = string.format("Luck x%.2f   Bites %d%% faster   Fight control +%d%%", rod.luck, math.floor((1 - rod.speed) * 100 + 0.5), math.floor(rod.control * 100 + 0.5))
+		UI.label(shovel.name, { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(0.6, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = shovel.color:Lerp(Color3.new(1, 1, 1), 0.4), Parent = card })
+		local stats = string.format("Luck x%.2f   Digs %d%% faster   Sweet spot +%d%%", shovel.luck, math.floor((1 - shovel.speed) * 100 + 0.5), math.floor(shovel.power * 100 + 0.5))
 		UI.label(stats, { Position = UDim2.fromOffset(12, 34), Size = UDim2.new(0.68, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, Font = T.BodyFont, TextColor3 = T.Muted, Parent = card })
 
 		local text, color, onClick
-		if data.equippedRod == rod.id then
+		if data.equippedShovel == shovel.id then
 			text, color = "Equipped", T.Card
-		elseif data.rodsOwned[rod.id] then
+		elseif data.shovelsOwned[shovel.id] then
 			text, color = "Equip", T.Accent
 			onClick = function()
-				act("EquipRod", rod.id)
+				act("EquipShovel", shovel.id)
 			end
-		elseif rod.requiresRebirths and data.rebirths < rod.requiresRebirths then
-			text, color = string.format("%d rebirth", rod.requiresRebirths), T.Card
+		elseif shovel.requiresRebirths and data.rebirths < shovel.requiresRebirths then
+			text, color = string.format("%d rebirth", shovel.requiresRebirths), T.Card
 		else
-			text = Format.Number(rod.price) .. " coins"
-			color = data.coins >= rod.price and T.Good or T.Bad
+			text = Format.Number(shovel.price) .. " coins"
+			color = data.coins >= shovel.price and T.Good or T.Bad
 			onClick = function()
-				act("BuyRod", rod.id)
+				act("BuyShovel", shovel.id)
 			end
 		end
 		UI.button(text, color, onClick, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(150, 40), Parent = card })
@@ -457,9 +457,9 @@ local function renderShop(body)
 		end
 	end
 
-	heading(body, "Rod skins (looks only)", nextOrder())
+	heading(body, "Shovel skins (looks only)", nextOrder())
 	for _, item in ipairs(Shop.Cosmetics) do
-		if item.kind == "rodSkin" then
+		if item.kind == "shovelSkin" then
 			cosmeticRow(item)
 		end
 	end
@@ -501,7 +501,7 @@ local function renderTeleport(body)
 	end
 
 	local hubRow = row(body, 56, 1)
-	UI.label("Harbor (hub)", { Position = UDim2.fromOffset(12, 14), Size = UDim2.new(0.6, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Parent = hubRow })
+	UI.label("Dig Town (hub)", { Position = UDim2.fromOffset(12, 14), Size = UDim2.new(0.6, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, Parent = hubRow })
 	UI.button("Go", T.Accent, function()
 		if act("Teleport", "hub") then
 			Panels.Teleport.close()
@@ -541,11 +541,11 @@ local function renderRebirth(body)
 	local requiredZone = Zones.ById[Config.RebirthRequiresZone]
 
 	local lines = {
-		string.format("Rebirths: %d   (now +%d%% coins from fish)", data.rebirths, nowBonus),
-		string.format("Next rebirth: +%d%% coins from fish, forever", nextBonus),
+		string.format("Rebirths: %d   (now +%d%% coins from finds)", data.rebirths, nowBonus),
+		string.format("Next rebirth: +%d%% coins from finds, forever", nextBonus),
 		string.format("Cost: %s coins", Format.Number(cost)),
-		"You keep: your Fish Book, favorite fish, bait, titles, skins, trails and passes.",
-		"You reset: coins, rods, unlocked zones and the rest of your bag.",
+		"You keep: your Collection, favorite finds, charms, titles, skins, trails and passes.",
+		"You reset: coins, shovels, unlocked zones and the rest of your backpack.",
 	}
 	if requiredZone then
 		table.insert(lines, "Requires: " .. requiredZone.name .. " unlocked.")
@@ -562,18 +562,18 @@ local function renderRebirth(body)
 end
 
 function Panels.Init(screenGui)
-	Panels.Bag = UI.window(screenGui, "Bag", renderBag)
-	Panels.Market = UI.window(screenGui, "Fish Market", renderMarket)
-	Panels.Bait = UI.window(screenGui, "Bait & Tackle", renderBait)
-	Panels.Bounties = UI.window(screenGui, "Old Pete's Bounties", renderBounties)
-	Panels.Book = UI.window(screenGui, "Fish Book", renderBook)
-	Panels.Rods = UI.window(screenGui, "Rods", renderRods)
+	Panels.Bag = UI.window(screenGui, "Backpack", renderBag)
+	Panels.Market = UI.window(screenGui, "Trading Post", renderMarket)
+	Panels.Charms = UI.window(screenGui, "Charm Cart", renderCharms)
+	Panels.Bounties = UI.window(screenGui, "Grandpa Gus's Bounties", renderBounties)
+	Panels.Book = UI.window(screenGui, "Collection", renderBook)
+	Panels.Shovels = UI.window(screenGui, "Shovels", renderShovels)
 	Panels.Shop = UI.window(screenGui, "Shop", renderShop)
 	Panels.Teleport = UI.window(screenGui, "Travel", renderTeleport)
 	Panels.Rebirth = UI.window(screenGui, "Rebirth", renderRebirth)
 
 	State.Changed:Connect(function()
-		for _, name in ipairs({ "Bag", "Market", "Bait", "Bounties", "Book", "Rods", "Shop", "Teleport", "Rebirth" }) do
+		for _, name in ipairs({ "Bag", "Market", "Charms", "Bounties", "Book", "Shovels", "Shop", "Teleport", "Rebirth" }) do
 			Panels[name].refresh()
 		end
 	end)

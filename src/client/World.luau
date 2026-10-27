@@ -1,5 +1,5 @@
 -- Things in the world that only this player sees: weather, opened zone gates,
--- the VIP door, and ambient life (fish jumping out of the water, seagulls).
+-- the VIP door, and ambient life (seagulls).
 
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
@@ -8,8 +8,6 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Events = require(Shared.Events)
-local Fish = require(Shared.Fish)
-local FishModel = require(Shared.FishModel)
 local Remotes = require(Shared.Remotes)
 
 local State = require(script.Parent.State)
@@ -105,95 +103,6 @@ end
 
 ------------------------------------------------------------------ Ambient life
 
-local player = game:GetService("Players").LocalPlayer
-local splashSound
-
-local function splashAt(position)
-	local holder = Instance.new("Part")
-	holder.Anchored = true
-	holder.CanCollide = false
-	holder.CanQuery = false
-	holder.CanTouch = false
-	holder.Transparency = 1
-	holder.Size = Vector3.one
-	holder.Position = position
-	local drops = Instance.new("ParticleEmitter")
-	drops.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-	drops.Color = ColorSequence.new(Color3.fromRGB(200, 240, 255))
-	drops.Size = NumberSequence.new(0.35)
-	drops.Lifetime = NumberRange.new(0.4, 0.7)
-	drops.Speed = NumberRange.new(8, 14)
-	drops.SpreadAngle = Vector2.new(35, 35)
-	drops.EmissionDirection = Enum.NormalId.Top
-	drops.Acceleration = Vector3.new(0, -40, 0)
-	drops.Rate = 0
-	drops.Parent = holder
-	holder.Parent = Workspace
-	drops:Emit(14)
-	if splashSound then
-		local camera = Workspace.CurrentCamera
-		if camera and (camera.CFrame.Position - position).Magnitude < 70 then
-			splashSound.PlaybackSpeed = 1.3 + math.random() * 0.4
-			splashSound:Play()
-		end
-	end
-	task.delay(1, function()
-		holder:Destroy()
-	end)
-end
-
--- Every few seconds a fish leaps out of the water somewhere near the player
-local function jumpingFish()
-	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-	if not root then
-		return
-	end
-	local angle = math.random() * math.pi * 2
-	local distance = 25 + math.random() * 45
-	local spot = root.Position + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance)
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = { player.Character }
-	params.IgnoreWater = false
-	local hit = Workspace:Raycast(Vector3.new(spot.X, 60, spot.Z), Vector3.new(0, -100, 0), params)
-	local zoneId = hit and hit.Instance:GetAttribute("FishingZone")
-	if not zoneId then
-		return
-	end
-	local pool = Fish.ByZone[zoneId]
-	if not pool then
-		return
-	end
-	local fish = pool[math.random(1, math.min(#pool, 9))] -- mostly the common ones
-	local model = FishModel.Build(fish.id, (fish.weight[1] + fish.weight[2]) / 2, false)
-	local body = model.PrimaryPart
-	body.Anchored = true
-	model.Parent = Workspace
-
-	local heading = math.random() * math.pi * 2
-	local direction = Vector3.new(math.cos(heading), 0, math.sin(heading))
-	local start = Vector3.new(spot.X, -0.5, spot.Z)
-	local travel = 5 + math.random() * 4
-	local height = 3 + math.random() * 4
-	local duration = 0.9 + math.random() * 0.4
-	splashAt(Vector3.new(spot.X, 0.2, spot.Z))
-	local t = 0
-	local connection
-	connection = RunService.RenderStepped:Connect(function(dt)
-		t += dt / duration
-		if t >= 1 then
-			connection:Disconnect()
-			splashAt(start + direction * travel + Vector3.new(0, 0.7, 0))
-			model:Destroy()
-			return
-		end
-		local position = start + direction * travel * t + Vector3.new(0, height * 4 * t * (1 - t), 0)
-		local slope = height * 4 * (1 - 2 * t) / travel
-		local look = (direction + Vector3.new(0, slope, 0)).Unit
-		body.CFrame = CFrame.lookAt(position, position + look)
-	end)
-end
-
 -- Seagulls circling over the islands
 local function seagulls()
 	local birds = {}
@@ -244,18 +153,7 @@ local function seagulls()
 end
 
 function World.Init()
-	splashSound = Instance.new("Sound")
-	splashSound.SoundId = "rbxasset://sounds/impact_water.mp3"
-	splashSound.Volume = 0.25
-	splashSound.Parent = game:GetService("SoundService")
-
 	seagulls()
-	task.spawn(function()
-		while true do
-			task.wait(2 + math.random() * 3)
-			pcall(jumpingFish)
-		end
-	end)
 
 	setupWeatherEffects()
 	applyWeather()

@@ -1,9 +1,9 @@
--- Moves players through Old Pete's first-day guide (see Shared/Tutorial).
--- Other services call TutorialService.Event(player, "Cast") etc.
+-- Moves players through Grandpa Gus's first-day guide (see Shared/Tutorial).
+-- Other services call TutorialService.Event(player, "Dig") etc.
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Tutorial = require(Shared.Tutorial)
-local Bait = require(Shared.Bait)
+local Charms = require(Shared.Charms)
 local Format = require(Shared.Format)
 local Remotes = require(Shared.Remotes)
 
@@ -25,22 +25,22 @@ function TutorialService.Event(player, event)
 		saved.tutorial += 1
 		if finished then
 			saved.coins += Tutorial.RewardCoins
-			local reward = Tutorial.RewardBait
-			saved.bait.owned[reward.id] = (saved.bait.owned[reward.id] or 0) + reward.amount
+			local reward = Tutorial.RewardCharm
+			saved.charms.owned[reward.id] = (saved.charms.owned[reward.id] or 0) + reward.amount
 		end
 	end)
 	if finished then
-		Remotes.Notify:FireClient(player, string.format("Old Pete: You're a natural! Here's %s coins and %d %s. Good luck out there!", Format.Number(Tutorial.RewardCoins), Tutorial.RewardBait.amount, Bait.ById[Tutorial.RewardBait.id].name), "success")
+		Remotes.Notify:FireClient(player, string.format("Grandpa Gus: You're a natural! Here's %s coins and %d %s charms. Happy digging!", Format.Number(Tutorial.RewardCoins), Tutorial.RewardCharm.amount, Charms.ById[Tutorial.RewardCharm.id].name), "success")
 	end
 end
 
 function TutorialService.Start()
-	-- The "take out your rod" step: watch for the rod appearing in the character
+	-- The "take out your shovel" step: watch for the shovel appearing in the character
 	DataService.OnLoaded(function(player)
 		local function watch(character)
 			character.ChildAdded:Connect(function(child)
 				if child:IsA("Tool") then
-					TutorialService.Event(player, "EquipRod")
+					TutorialService.Event(player, "EquipShovel")
 				end
 			end)
 		end

@@ -34,7 +34,7 @@ function CameraController.IsLocked()
 	return enabled and not cursorFree and not UI.IsWindowOpen()
 end
 
--- Shake the camera (used when a fish thrashes)
+-- Shake the camera (used when digging hits something)
 function CameraController.Shake(amount, seconds)
 	shakeAmount = math.max(shakeAmount, amount)
 	shakeUntil = math.max(shakeUntil, os.clock() + seconds)
@@ -160,7 +160,7 @@ function CameraController.Init(screenGui)
 	end
 	player.CharacterAdded:Connect(onCharacter)
 
-	RunService:BindToRenderStep("ReelShoulderCamera", Enum.RenderPriority.Camera.Value + 1, update)
+	RunService:BindToRenderStep("ShoulderCamera", Enum.RenderPriority.Camera.Value + 1, update)
 end
 
 return CameraController

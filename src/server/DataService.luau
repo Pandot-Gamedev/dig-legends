@@ -8,7 +8,7 @@ local RunService = game:GetService("RunService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
-local Rods = require(Shared.Rods)
+local Shovels = require(Shared.Shovels)
 local Zones = require(Shared.Zones)
 local Remotes = require(Shared.Remotes)
 local Level = require(Shared.Level)
@@ -21,21 +21,21 @@ local function defaultData()
 	return {
 		coins = 0,
 		totalEarned = 0,
-		totalCaught = 0,
+		totalFound = 0,
 		rebirths = 0,
 		xp = 0,
-		tutorial = 1, -- step of Old Pete's guide (Shared/Tutorial)
+		tutorial = 1, -- step of Grandpa Gus's guide (Shared/Tutorial)
 		bag = {}, -- { {uid, id, weight, value, shiny, favorite} }
 		nextUid = 1,
-		bait = {
-			owned = {}, -- [baitId] = how many
-			equipped = "bread",
+		charms = {
+			owned = {}, -- [charmId] = how many
+			equipped = "none",
 		},
 		bounties = { day = 0, list = {} },
-		rodsOwned = { [Rods.Default] = true },
-		equippedRod = Rods.Default,
+		shovelsOwned = { [Shovels.Default] = true },
+		equippedShovel = Shovels.Default,
 		zones = { [Zones.Default] = true },
-		book = {}, -- [fishId] = { count, best, shiny }
+		book = {}, -- [findId] = { count, best, shiny }
 		cosmetics = {
 			owned = {}, -- [cosmeticId] = true
 			equipped = {}, -- [kind] = cosmeticId
@@ -106,15 +106,7 @@ local function loadData(player)
 		end)
 
 		if ok and not lockedElsewhere and result then
-			local data = reconcile(result.data or defaultData(), defaultData())
-			-- Saves from before fish had ids
-			for _, fish in ipairs(data.bag) do
-				if not fish.uid then
-					fish.uid = data.nextUid
-					data.nextUid += 1
-				end
-			end
-			return data, true
+			return reconcile(result.data or defaultData(), defaultData()), true
 		end
 
 		if not ok then
@@ -152,9 +144,9 @@ local function saveData(player, release)
 		warn("[DataService] Save failed for " .. player.Name .. ": " .. tostring(err))
 	end
 
-	-- Global "most fish caught" board
+	-- Global "most finds dug up" board
 	pcall(function()
-		DataStoreService:GetOrderedDataStore(Config.LeaderboardStoreName):SetAsync(tostring(player.UserId), data.totalCaught)
+		DataStoreService:GetOrderedDataStore(Config.LeaderboardStoreName):SetAsync(tostring(player.UserId), data.totalFound)
 	end)
 	return ok
 end
@@ -162,7 +154,7 @@ end
 local function setupLeaderstats(player)
 	local folder = Instance.new("Folder")
 	folder.Name = "leaderstats"
-	for _, name in ipairs({ "Level", "Coins", "Caught", "Rebirths" }) do
+	for _, name in ipairs({ "Level", "Coins", "Found", "Rebirths" }) do
 		local value = Instance.new("IntValue")
 		value.Name = name
 		value.Parent = folder
@@ -180,7 +172,7 @@ local function refresh(player)
 	if stats then
 		stats.Level.Value = Level.FromXp(data.xp)
 		stats.Coins.Value = data.coins
-		stats.Caught.Value = data.totalCaught
+		stats.Found.Value = data.totalFound
 		stats.Rebirths.Value = data.rebirths
 	end
 	for _, listener in ipairs(listeners) do

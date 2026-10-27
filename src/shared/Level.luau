@@ -1,7 +1,7 @@
--- Angler level. Every catch gives XP (more for rarer fish and new species).
+-- Digger level. Every find gives XP (more for rarer finds and new ones).
 -- Your level shows above your head and pays a coin reward each time it goes up.
 
-local Fish = require(script.Parent.Fish)
+local Finds = require(script.Parent.Finds)
 
 local Level = {}
 
@@ -11,9 +11,8 @@ Level.XpByRarity = {
 	Rare = 25,
 	Epic = 60,
 	Legendary = 150,
-	Mythic = 400,
 }
-Level.NewSpeciesBonus = 25
+Level.NewFindBonus = 25
 Level.CoinsPerLevel = 150 -- reward for reaching level N is N * this
 
 -- Total XP needed to reach a level (level 1 needs 0)
@@ -36,11 +35,11 @@ function Level.Progress(xp)
 	return (xp - from) / (to - from), level
 end
 
-function Level.XpForCatch(fishId, isNew)
-	local fish = Fish.ById[fishId]
-	local xp = Level.XpByRarity[fish.rarity] or 5
+function Level.XpForFind(findId, isNew)
+	local find = Finds.ById[findId]
+	local xp = Level.XpByRarity[find.rarity] or 5
 	if isNew then
-		xp += Level.NewSpeciesBonus
+		xp += Level.NewFindBonus
 	end
 	return xp
 end

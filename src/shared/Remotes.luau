@@ -7,19 +7,16 @@ local RunService = game:GetService("RunService")
 local EVENTS = {
 	"DataUpdate", -- server -> player: the player's full save data
 	"Notify", -- server -> player: a toast message
-	"OpenPanel", -- server -> player: open a menu (e.g. the rod shop)
-	"CancelCast", -- player -> server: stop fishing
-	"Nibble", -- server -> player: a fish is nibbling (don't strike yet!)
-	"Bite", -- server -> player: the real bite, strike now
-	"Hook", -- player -> server: the player struck
-	"Fight", -- server -> player: the fish is hooked, start the reeling fight
-	"Reel", -- player -> server: how the fight ended
-	"CatchResult", -- server -> player: what was caught, or why it got away
+	"OpenPanel", -- server -> player: open a menu (e.g. the shovel shop)
+	"CancelDig", -- player -> server: stop digging
+	"DigReady", -- server -> player: something is down there, start the dig minigame
+	"DigDone", -- player -> server: how the minigame ended
+	"DigResult", -- server -> player: what was found, or why it broke
 }
 
 local FUNCTIONS = {
-	"Action", -- player -> server: buy rod, unlock zone, rebirth, teleport, equip...
-	"Cast", -- player -> server: cast at a position, returns the cast id if the bobber landed
+	"Action", -- player -> server: buy shovel, unlock zone, rebirth, teleport, equip...
+	"StartDig", -- player -> server: dig at a dig spot, returns the dig id if it started
 }
 
 local Remotes = {}

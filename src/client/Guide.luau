@@ -1,5 +1,5 @@
--- Old Pete's first-day guide on screen: the current goal at the top, a golden
--- line from you to where you need to go, and Pete talking above his head.
+-- Grandpa Gus's first-day guide on screen: the current goal at the top, a golden
+-- line from you to where you need to go, and Gus talking above his head.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -14,19 +14,19 @@ local T = UI.Theme
 
 local Guide = {}
 
-local PETE_TIPS = {
-	"Bring me the fish on my board and I'll pay you three times the market price!",
-	"Bubbles on the water mean fish. Cast near them for quicker bites.",
-	"Don't strike at nibbles! Wait for the big splash.",
-	"Fish that are in demand at the market sell for double. Check Marina's stall!",
-	"Tackle Tom turns your spare fish into better bait.",
-	"A legendary fish visits every week. Check the event board!",
+local GUS_TIPS = {
+	"Bring me the finds on my board and I'll pay you three times what Ruby would!",
+	"Sparkling dirt means treasure. Each spot takes a little while to refill after you dig it.",
+	"Hit the gold middle of the green for perfect digs. Perfect finds are worth more!",
+	"Finds that are in demand sell for double. Check Ruby's Trading Post!",
+	"Clover at the Charm Cart turns your spare finds into lucky charms.",
+	"A legendary find is buried somewhere every week. Check the event board!",
 }
 
 local player = Players.LocalPlayer
 local card, cardText
 local beam, beamFrom, beamTo, marker, follower
-local peteBubble, peteText
+local gusBubble, gusText
 
 local function findTarget(name)
 	if not name then
@@ -40,9 +40,9 @@ local function findTarget(name)
 	return nil
 end
 
-local function findPete()
+local function findGus()
 	for _, item in ipairs(Workspace:GetChildren()) do
-		if item:IsA("Model") and item:GetAttribute("NpcId") == "OldPete" then
+		if item:IsA("Model") and item:GetAttribute("NpcId") == "Gus" then
 			return item
 		end
 	end
@@ -65,7 +65,7 @@ local function update()
 		marker.Enabled = false
 		return
 	end
-	cardText.Text = string.format("Old Pete (%d/%d): %s", index, #Tutorial.Steps, step.text)
+	cardText.Text = string.format("Grandpa Gus (%d/%d): %s", index, #Tutorial.Steps, step.text)
 
 	local target = findTarget(step.target)
 	if target then
@@ -79,28 +79,28 @@ local function update()
 	end
 end
 
-local function setupPete()
-	peteBubble = UI.new("BillboardGui", {
-		Name = "PeteSays",
+local function setupGus()
+	gusBubble = UI.new("BillboardGui", {
+		Name = "GusSays",
 		Size = UDim2.fromOffset(260, 90),
 		StudsOffset = Vector3.new(0, 5.5, 0),
 		MaxDistance = 70,
 		Parent = player:WaitForChild("PlayerGui"),
 	})
-	local bubble = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), Parent = peteBubble }, { UI.corner(12), UI.padding(8) })
-	peteText = UI.label("", { Size = UDim2.fromScale(1, 1), TextColor3 = Color3.fromRGB(30, 30, 40), Font = T.BodyFont, TextWrapped = true, Parent = bubble })
+	local bubble = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), Parent = gusBubble }, { UI.corner(12), UI.padding(8) })
+	gusText = UI.label("", { Size = UDim2.fromScale(1, 1), TextColor3 = Color3.fromRGB(30, 30, 40), Font = T.BodyFont, TextWrapped = true, Parent = bubble })
 
 	task.spawn(function()
 		local tip = 1
 		while true do
-			local pete = findPete()
-			peteBubble.Adornee = pete and pete:FindFirstChild("Head")
+			local gus = findGus()
+			gusBubble.Adornee = gus and gus:FindFirstChild("Head")
 			local step = currentStep()
 			if step then
-				peteText.Text = step.text
+				gusText.Text = step.text
 			else
-				peteText.Text = PETE_TIPS[tip]
-				tip = tip % #PETE_TIPS + 1
+				gusText.Text = GUS_TIPS[tip]
+				tip = tip % #GUS_TIPS + 1
 			end
 			task.wait(step and 1 or 8)
 		end
@@ -174,7 +174,7 @@ function Guide.Init(screenGui)
 		update()
 	end)
 	update()
-	setupPete()
+	setupGus()
 end
 
 return Guide

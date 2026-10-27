@@ -1,4 +1,4 @@
--- Connects the world to the game: shop and market prompts, zone gates,
+-- Connects the world to the game: shop and Trading Post prompts, zone gates,
 -- the global leaderboard board and the weekly event board.
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -26,7 +26,7 @@ local function hookPrompt(prompt)
 	end
 	local station = holder:GetAttribute("Station")
 	local gateZone = holder:GetAttribute("ZoneGate")
-	local panels = { Sell = "Market", Rods = "Rods", Bait = "Bait", Bounties = "Bounties" }
+	local panels = { Sell = "Market", Shovels = "Shovels", Charms = "Charms", Bounties = "Bounties" }
 	if station and panels[station] then
 		prompt.Triggered:Connect(function(player)
 			Remotes.OpenPanel:FireClient(player, panels[station])
@@ -112,7 +112,7 @@ local function nameFor(userId)
 end
 
 local function runLeaderboard(boardPart)
-	local setText = makeBoardGui(boardPart, "Most Fish Caught")
+	local setText = makeBoardGui(boardPart, "Most Finds Dug Up")
 	local store = DataStoreService:GetOrderedDataStore(Config.LeaderboardStoreName)
 	while true do
 		local ok, pages = pcall(function()
@@ -123,7 +123,7 @@ local function runLeaderboard(boardPart)
 			for rank, entry in ipairs(pages:GetCurrentPage()) do
 				table.insert(lines, string.format("%d. %s  -  %s", rank, nameFor(tonumber(entry.key)), Format.Number(entry.value)))
 			end
-			setText(#lines > 0 and table.concat(lines, "\n") or "No catches yet. Be the first!")
+			setText(#lines > 0 and table.concat(lines, "\n") or "No finds yet. Be the first!")
 		else
 			setText("Leaderboard unavailable right now.")
 		end
@@ -134,13 +134,13 @@ end
 local function runEventBoard(boardPart)
 	local setText = makeBoardGui(boardPart, "This Week's Legend")
 	while true do
-		local fish, weekLeft = Events.GetEventFish()
+		local find, weekLeft = Events.GetEventFind()
 		local weather, weatherLeft = Events.GetWeather()
-		local zone = Zones.ById[fish.zone]
+		local zone = Zones.ById[find.zone]
 		setText(string.format(
 			"%s\nonly in %s\nends in %s\n\nWeather: %s\n%s\n(changes in %s)",
-			fish.name,
-			zone and zone.name or fish.zone,
+			find.name,
+			zone and zone.name or find.zone,
 			Format.Duration(weekLeft),
 			weather.name,
 			weather.description,

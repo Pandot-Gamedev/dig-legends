@@ -1,4 +1,4 @@
--- Dig Legends player script. Builds the screen and starts fishing controls.
+-- Dig Legends player script. Builds the screen and starts digging controls.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -8,7 +8,7 @@ local Notifications = require(script.Notifications)
 local CameraController = require(script.CameraController)
 local Panels = require(script.Panels)
 local Hud = require(script.Hud)
-local Fishing = require(script.Fishing)
+local Digging = require(script.Digging)
 local World = require(script.World)
 local Guide = require(script.Guide)
 
@@ -36,9 +36,9 @@ end
 Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 rescale()
 
--- The reel minigame gets its own unscaled screen so its tap area covers everything
-local fishingGui = UI.new("ScreenGui", {
-	Name = "ReelFishingUI",
+-- The dig minigame gets its own unscaled screen so its tap area covers everything
+local diggingGui = UI.new("ScreenGui", {
+	Name = "DigMinigameUI",
 	ResetOnSpawn = false,
 	DisplayOrder = 5,
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -46,10 +46,10 @@ local fishingGui = UI.new("ScreenGui", {
 })
 
 Notifications.Init(screenGui)
-CameraController.Init(fishingGui)
+CameraController.Init(diggingGui)
 Panels.Init(screenGui)
 Hud.Init(screenGui)
-Fishing.Init(fishingGui)
+Digging.Init(diggingGui)
 World.Init()
 Guide.Init(screenGui)
 

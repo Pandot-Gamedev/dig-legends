@@ -1,4 +1,4 @@
--- Robux purchases: game passes (VIP, Auto Sell, Big Bag, Teleporter) and
+-- Robux purchases: game passes (VIP, Auto Sell, Big Backpack, Teleporter) and
 -- cosmetic developer products.
 
 local MarketplaceService = game:GetService("MarketplaceService")

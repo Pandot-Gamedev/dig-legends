@@ -6,20 +6,19 @@ Config.GameName = "Dig Legends"
 
 -- Saving
 Config.DataStoreName = "PlayerData_v1"
-Config.LeaderboardStoreName = "TotalCaught_v1"
+Config.LeaderboardStoreName = "TotalFound_v1"
 Config.AutosaveSeconds = 120
 
--- Fish bag
+-- Backpack
 Config.BagSize = 20
-Config.BigBagSize = 60 -- with the Big Bag pass
+Config.BigBagSize = 60 -- with the Big Backpack pass
 
--- Fishing
-Config.MaxCastDistance = 80 -- studs from the player to the bobber
-Config.BiteWaitMin = 3.5 -- seconds, before rod speed bonus
-Config.BiteWaitMax = 8
-Config.NibblesMax = 3 -- fake nibbles before the real bite (striking on one scares the fish)
-Config.HookGrace = 0.35 -- extra seconds allowed on the server for internet lag
-Config.CastCooldown = 1
+-- Digging
+Config.DigRange = 9 -- studs from the player to a dig spot
+Config.DigDownMin = 1.2 -- seconds of digging before the find shows up (before shovel speed)
+Config.DigDownMax = 2.4
+Config.DigCooldown = 0.6
+Config.SpotCooldown = 20 -- seconds before you can dig the same spot again
 Config.ShinyChance = 1 / 100
 Config.ShinyValueMultiplier = 3
 
@@ -27,15 +26,15 @@ Config.ShinyValueMultiplier = 3
 Config.RebirthBaseCost = 1000000
 Config.RebirthCostGrowth = 3
 Config.RebirthSellBonus = 0.25 -- +25% coins from selling per rebirth
-Config.RebirthRequiresZone = "frostbite"
+Config.RebirthRequiresZone = "volcano" -- ignored until that zone exists
 
 -- Daily login reward: DailyRewardBase * streak day (streak capped at 7)
 Config.DailyRewardBase = 100
 Config.DailyStreakCap = 7
 
--- Fish Market
-Config.MarketSeconds = 30 * 60 -- how often the "in demand" fish change
-Config.StationRange = 25 -- how close you must be to the market / bait shop to use it
+-- Trading Post
+Config.MarketSeconds = 30 * 60 -- how often the "in demand" finds change
+Config.StationRange = 25 -- how close you must be to the Trading Post / Charm Cart to use it
 
 -- Set to true to try every game pass for free while testing in Roblox Studio.
 -- Has no effect in the live game.

@@ -1,11 +1,11 @@
--- Shows each player's name tag (name, angler level, title, VIP) and cosmetics:
--- trails, rod skins and VIP extras.
+-- Shows each player's name tag (name, digger level, title, VIP) and cosmetics:
+-- trails, shovel skins and VIP extras.
 -- Also hands out free titles players earn by playing.
 
 local Players = game:GetService("Players")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
-local Fish = require(Shared.Fish)
+local Finds = require(Shared.Finds)
 local Shop = require(Shared.Shop)
 local Remotes = require(Shared.Remotes)
 local Level = require(Shared.Level)
@@ -23,24 +23,17 @@ local function equippedItem(data, kind)
 	return id and data.cosmetics.owned[id] and Shop.CosmeticById[id] or nil
 end
 
-function CosmeticService.StyleRod(player, handle)
+function CosmeticService.StyleShovel(player, blade)
 	local data = DataService.Get(player)
-	local skin = data and equippedItem(data, "rodSkin")
+	local skin = data and equippedItem(data, "shovelSkin")
 	if skin then
-		handle.Color = skin.color
-		handle.Material = skin.material
-	end
-end
-
-function CosmeticService.DecorateBobber(player, bobber)
-	if ShopService.HasPass(player, "VIP") then
-		bobber.Color = VIP_GOLD
-		bobber.Material = Enum.Material.Neon
+		blade.Color = skin.color
+		blade.Material = skin.material
 	end
 end
 
 local function clearOld(character)
-	for _, name in ipairs({ "ReelTitle", "ReelTrail", "ReelCrown", "ReelTrailTop", "ReelTrailBottom" }) do
+	for _, name in ipairs({ "DigTitle", "DigTrail", "DigCrown", "DigTrailTop", "DigTrailBottom" }) do
 		for _, item in ipairs(character:GetDescendants()) do
 			if item.Name == name then
 				item:Destroy()
@@ -71,7 +64,7 @@ local function applyToCharacter(player)
 	end
 
 	local gui = Instance.new("BillboardGui")
-	gui.Name = "ReelTitle"
+	gui.Name = "DigTitle"
 	gui.Size = UDim2.fromOffset(240, 72)
 	gui.StudsOffset = Vector3.new(0, 3, 0)
 	gui.MaxDistance = 90
@@ -99,12 +92,12 @@ local function applyToCharacter(player)
 		line(title.text, title.color, 18)
 	end
 	line(player.DisplayName, vip and VIP_GOLD or Color3.new(1, 1, 1), 24)
-	line(string.format("%sLv %d Angler", vip and "VIP  " or "", Level.FromXp(data.xp)), Color3.fromRGB(150, 220, 255), 18)
+	line(string.format("%sLv %d Digger", vip and "VIP  " or "", Level.FromXp(data.xp)), Color3.fromRGB(150, 220, 255), 18)
 	gui.Parent = head
 
 	if vip then
 		local crown = Instance.new("Part")
-		crown.Name = "ReelCrown"
+		crown.Name = "DigCrown"
 		crown.Size = Vector3.new(1.1, 0.5, 1.1)
 		crown.Color = VIP_GOLD
 		crown.Material = Enum.Material.Neon
@@ -122,11 +115,11 @@ local function applyToCharacter(player)
 	local trailItem = equippedItem(data, "trail")
 	if trailItem then
 		local top = Instance.new("Attachment")
-		top.Name = "ReelTrailTop"
+		top.Name = "DigTrailTop"
 		top.Position = Vector3.new(0, 0.8, 0.5)
 		top.Parent = root
 		local bottom = Instance.new("Attachment")
-		bottom.Name = "ReelTrailBottom"
+		bottom.Name = "DigTrailBottom"
 		bottom.Position = Vector3.new(0, -0.8, 0.5)
 		bottom.Parent = root
 		local keypoints = {}
@@ -134,7 +127,7 @@ local function applyToCharacter(player)
 			table.insert(keypoints, ColorSequenceKeypoint.new((index - 1) / math.max(1, #trailItem.colors - 1), color))
 		end
 		local trail = Instance.new("Trail")
-		trail.Name = "ReelTrail"
+		trail.Name = "DigTrail"
 		trail.Attachment0 = top
 		trail.Attachment1 = bottom
 		trail.Color = ColorSequence.new(keypoints)
@@ -157,15 +150,19 @@ end
 
 local function earnedTitleUnlocked(rule, data)
 	if rule.rule == "zoneBook" then
-		for _, fish in ipairs(Fish.ByZone[rule.zone] or {}) do
-			if not data.book[fish.id] then
+		local list = Finds.ByZone[rule.zone]
+		if not list then
+			return false
+		end
+		for _, find in ipairs(list) do
+			if not data.book[find.id] then
 				return false
 			end
 		end
 		return true
-	elseif rule.rule == "eventFish" then
-		for _, fish in ipairs(Fish.EventFish) do
-			if data.book[fish.id] then
+	elseif rule.rule == "eventFind" then
+		for _, find in ipairs(Finds.EventFinds) do
+			if data.book[find.id] then
 				return true
 			end
 		end
