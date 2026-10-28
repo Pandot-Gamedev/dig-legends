@@ -7,13 +7,13 @@ The ready-to-open game file is [build/DigLegends.rbxlx](build/DigLegends.rbxlx).
 
 ## Status
 
-Published privately on Roblox on 2026-10-28:
+Public on Roblox since 2026-10-28 (shown as Ages 16+ until ID verification works):
 [Dig Legends](https://www.roblox.com/games/83829887315860/Dig-Legends) (experience 10773541582).
 Steps 1 to 4 are done and play-tested in Roblox Studio with no script errors, including Treasure
 Rush and dig buddies with 2 test players. The store art for step 5 is in `store/`.
 The 4 game passes and 10 cosmetic products were made on 2026-10-28 with
 `tools/create_shop_items.luau`; their ids are in `src/shared/Shop.luau` and the shop is live.
-Still to come: icon, thumbnails and content questionnaire, then going public (step 6).
+Icon, thumbnails and the content questionnaire are done (step 6).
 
 ## How to test in Roblox Studio
 
