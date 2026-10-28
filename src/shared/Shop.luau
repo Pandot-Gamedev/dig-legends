@@ -18,18 +18,18 @@ Shop.Passes = {
 -- kind: "shovelSkin" changes how your shovel looks, "trail" adds a trail behind you,
 -- "title" shows a title above your head.
 Shop.Cosmetics = {
-	{ id = "skin_golden", kind = "shovelSkin", name = "Golden Shovel Skin", productId = 0, suggestedPrice = 99, color = Color3.fromRGB(255, 200, 40), material = Enum.Material.Foil },
-	{ id = "skin_neon", kind = "shovelSkin", name = "Neon Pink Shovel Skin", productId = 0, suggestedPrice = 75, color = Color3.fromRGB(255, 60, 200), material = Enum.Material.Neon },
-	{ id = "skin_galaxy", kind = "shovelSkin", name = "Galaxy Shovel Skin", productId = 0, suggestedPrice = 149, color = Color3.fromRGB(110, 60, 255), material = Enum.Material.ForceField },
-	{ id = "skin_candy", kind = "shovelSkin", name = "Candy Shovel Skin", productId = 0, suggestedPrice = 49, color = Color3.fromRGB(255, 120, 150), material = Enum.Material.SmoothPlastic },
+	{ id = "skin_golden", kind = "shovelSkin", name = "Golden Shovel Skin", productId = 3723377192, suggestedPrice = 99, color = Color3.fromRGB(255, 200, 40), material = Enum.Material.Foil },
+	{ id = "skin_neon", kind = "shovelSkin", name = "Neon Pink Shovel Skin", productId = 3723377204, suggestedPrice = 75, color = Color3.fromRGB(255, 60, 200), material = Enum.Material.Neon },
+	{ id = "skin_galaxy", kind = "shovelSkin", name = "Galaxy Shovel Skin", productId = 3723377180, suggestedPrice = 149, color = Color3.fromRGB(110, 60, 255), material = Enum.Material.ForceField },
+	{ id = "skin_candy", kind = "shovelSkin", name = "Candy Shovel Skin", productId = 3723377224, suggestedPrice = 49, color = Color3.fromRGB(255, 120, 150), material = Enum.Material.SmoothPlastic },
 
-	{ id = "trail_sparkle", kind = "trail", name = "Sparkle Trail", productId = 0, suggestedPrice = 49, colors = { Color3.fromRGB(0, 170, 255), Color3.fromRGB(0, 255, 200) } },
-	{ id = "trail_fire", kind = "trail", name = "Fire Trail", productId = 0, suggestedPrice = 75, colors = { Color3.fromRGB(255, 220, 0), Color3.fromRGB(255, 40, 0) } },
-	{ id = "trail_rainbow", kind = "trail", name = "Rainbow Trail", productId = 0, suggestedPrice = 129, colors = { Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 255, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 120, 255), Color3.fromRGB(200, 0, 255) } },
+	{ id = "trail_sparkle", kind = "trail", name = "Sparkle Trail", productId = 3723377257, suggestedPrice = 49, colors = { Color3.fromRGB(0, 170, 255), Color3.fromRGB(0, 255, 200) } },
+	{ id = "trail_fire", kind = "trail", name = "Fire Trail", productId = 3723377243, suggestedPrice = 75, colors = { Color3.fromRGB(255, 220, 0), Color3.fromRGB(255, 40, 0) } },
+	{ id = "trail_rainbow", kind = "trail", name = "Rainbow Trail", productId = 3723377236, suggestedPrice = 129, colors = { Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 255, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 120, 255), Color3.fromRGB(200, 0, 255) } },
 
-	{ id = "title_lucky", kind = "title", name = "Title: Lucky Digger", text = "Lucky Digger", productId = 0, suggestedPrice = 25, color = Color3.fromRGB(120, 200, 255) },
-	{ id = "title_whisperer", kind = "title", name = "Title: Rock Whisperer", text = "Rock Whisperer", productId = 0, suggestedPrice = 49, color = Color3.fromRGB(160, 255, 160) },
-	{ id = "title_diglegend", kind = "title", name = "Title: Dig Legend", text = "Dig Legend", productId = 0, suggestedPrice = 99, color = Color3.fromRGB(255, 190, 60) },
+	{ id = "title_lucky", kind = "title", name = "Title: Lucky Digger", text = "Lucky Digger", productId = 3723377288, suggestedPrice = 25, color = Color3.fromRGB(120, 200, 255) },
+	{ id = "title_whisperer", kind = "title", name = "Title: Rock Whisperer", text = "Rock Whisperer", productId = 3723377276, suggestedPrice = 49, color = Color3.fromRGB(160, 255, 160) },
+	{ id = "title_diglegend", kind = "title", name = "Title: Dig Legend", text = "Dig Legend", productId = 3723377268, suggestedPrice = 99, color = Color3.fromRGB(255, 190, 60) },
 }
 
 -- Free titles earned by playing. The server checks the "rule".

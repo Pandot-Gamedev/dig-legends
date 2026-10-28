@@ -11,8 +11,9 @@ Published privately on Roblox on 2026-10-28:
 [Dig Legends](https://www.roblox.com/games/83829887315860/Dig-Legends) (experience 10773541582).
 Steps 1 to 4 are done and play-tested in Roblox Studio with no script errors, including Treasure
 Rush and dig buddies with 2 test players. The store art for step 5 is in `store/`.
-Still to come: the pass and product ids (step 5), then going public (step 6).
-All shop ids are 0, so passes and cosmetics show "Coming soon".
+The 4 game passes and 10 cosmetic products were made on 2026-10-28 with
+`tools/create_shop_items.luau`; their ids are in `src/shared/Shop.luau` and the shop is live.
+Still to come: icon, thumbnails and content questionnaire, then going public (step 6).
 
 ## How to test in Roblox Studio
 
@@ -83,7 +84,7 @@ src/shared/              ReplicatedStorage.Shared (used by server and players)
   Zones.luau             the five zones with their level and coin price
   Shovels.luau, Charms.luau
   Dig.luau               the dig minigame rules, shared by server and player
-  Shop.luau              game pass and product ids (fill these in)
+  Shop.luau              game pass and product ids
 src/server/              ServerScriptService.Server
   DigService.luau        dig spots, digging down, rolling finds, checking results
   MapBuilder.luau        builds Dig Town and one island per zone if there is no Map folder

@@ -8,9 +8,11 @@
 --      and under Local Secrets create one named ShopKey holding the key, domain
 --      apis.roblox.com.
 -- Then press Play, pick the Server view and paste this file into the command bar.
--- It prints one "ITEM" line per item with its new id. Items that already exist
--- (same name) are skipped, so running it twice is safe. Turn Allow HTTP Requests
--- off again afterwards.
+-- It prints one "ITEM" line per item with its new id. Developer products that
+-- already exist (same name) are skipped, but game passes are not, so running it
+-- twice makes duplicate passes. The key needs write access to both game-passes
+-- and developer-products. Turn Allow HTTP Requests off again afterwards.
+-- Used on 2026-10-28: the ids it made are in src/shared/Shop.luau.
 
 local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
