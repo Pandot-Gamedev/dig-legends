@@ -27,6 +27,8 @@ local ShopService = require(script.Parent.ShopService)
 local EconomyService = require(script.Parent.EconomyService)
 local CosmeticService = require(script.Parent.CosmeticService)
 local TutorialService = require(script.Parent.TutorialService)
+local RushService = require(script.Parent.RushService)
+local BuddyService = require(script.Parent.BuddyService)
 
 local DigService = {}
 
@@ -96,8 +98,9 @@ local function currentCharm(data)
 	return charm
 end
 
--- Pick what is buried, using shovel luck, the charm, weather and the weekly event
-local function rollFind(data, zoneId, charm)
+-- Pick what is buried, using shovel luck, the charm, weather and the weekly event.
+-- minOrder (optional) skips rarities below it, e.g. Rare or better for Treasure Rush loot.
+local function rollFind(data, zoneId, charm, minOrder)
 	local shovel = Shovels.ById[data.equippedShovel] or Shovels.ById[Shovels.Default]
 	local weather = Events.GetWeather()
 	local eventFind = Events.GetEventFind()
@@ -111,7 +114,7 @@ local function rollFind(data, zoneId, charm)
 	local choices = {}
 	local total = 0
 	for _, rarity in ipairs(Finds.Rarities) do
-		if byRarity[rarity.id] then
+		if byRarity[rarity.id] and rarity.order >= (minOrder or 1) then
 			local weight = rarity.weight
 			if rarity.order >= 3 then
 				weight *= shovel.luck * (weather.luckMultiplier or 1) * (charm.luck or 1)
@@ -124,6 +127,9 @@ local function rollFind(data, zoneId, charm)
 		end
 	end
 
+	if #choices == 0 then
+		return rollFind(data, zoneId, charm)
+	end
 	local pick = random:NextNumber(0, total)
 	local chosen = choices[1].rarity
 	for _, choice in ipairs(choices) do
@@ -160,15 +166,43 @@ local function rollFind(data, zoneId, charm)
 	}
 end
 
+-- A pillar of light over the player for a few seconds, seen by everyone
+local function beacon(player, color)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	local pillar = Instance.new("Part")
+	pillar.Name = "FindBeacon"
+	pillar.Shape = Enum.PartType.Cylinder
+	pillar.Size = Vector3.new(60, 2.5, 2.5)
+	pillar.CFrame = CFrame.new(root.Position + Vector3.new(0, 28, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	pillar.Anchored = true
+	pillar.CanCollide = false
+	pillar.CanQuery = false
+	pillar.CanTouch = false
+	pillar.CastShadow = false
+	pillar.Material = Enum.Material.Neon
+	pillar.Color = color
+	pillar.Transparency = 0.45
+	pillar.Parent = Workspace
+	task.delay(4, function()
+		pillar:Destroy()
+	end)
+end
+
+-- Legendary and Shiny finds are announced to the whole server
 local function announce(player, find, found)
 	local rarity = Finds.RarityById[find.rarity]
-	if rarity.order < 5 then
+	if rarity.order < 5 and not found.shiny then
 		return
 	end
 	local text = string.format("%s dug up a %s%s %s!", player.DisplayName, found.shiny and "Shiny " or "", find.rarity, find.name)
 	for _, other in ipairs(Players:GetPlayers()) do
 		Remotes.Notify:FireClient(other, text, "rare")
 	end
+	beacon(player, rarity.color)
 end
 
 local function coolSpot(player, spot)
@@ -183,7 +217,7 @@ local function lose(player, dig, reason)
 	end
 	-- Once the find is rolled the spot is used up, however the dig ends. Otherwise
 	-- players could put the shovel away to reroll a find they don't like.
-	if dig.phase == "minigame" then
+	if dig.phase == "minigame" and not dig.rush then
 		coolSpot(player, dig.spot)
 	end
 	Remotes.DigResult:FireClient(player, dig.id, nil, reason)
@@ -195,6 +229,23 @@ local function onReady(player, dig)
 	end
 	local data = DataService.Get(player)
 	if not data then
+		return
+	end
+
+	local shovel = Shovels.ById[data.equippedShovel] or Shovels.ById[Shovels.Default]
+	if dig.rush then
+		-- Treasure Rush digs don't find anything themselves; each good one fills the site
+		dig.params = Dig.Params(Finds.RarityById.Uncommon, shovel)
+		dig.params.rush = true
+		dig.phase = "minigame"
+		dig.readyAt = os.clock()
+		dirtBurst(dig.spot, 12)
+		Remotes.DigReady:FireClient(player, dig.id, dig.params)
+		task.delay(Dig.MaxSeconds + 5, function()
+			if digs[player] == dig then
+				lose(player, dig, "timeout")
+			end
+		end)
 		return
 	end
 
@@ -211,7 +262,6 @@ local function onReady(player, dig)
 		end)
 	end
 
-	local shovel = Shovels.ById[data.equippedShovel] or Shovels.ById[Shovels.Default]
 	dig.find = rollFind(data, dig.zone, charm)
 	dig.rarity = Finds.RarityById[Finds.ById[dig.find.id].rarity]
 	dig.params = Dig.Params(dig.rarity, shovel)
@@ -246,7 +296,8 @@ local function onStartDig(player, spot)
 		return nil
 	end
 
-	if #data.bag >= runtime.bagSize then
+	local rush = RushService.IsSite(spot)
+	if not rush and #data.bag >= runtime.bagSize then
 		if ShopService.HasPass(player, "AutoSell") then
 			EconomyService.SellAll(player, true)
 		end
@@ -259,18 +310,18 @@ local function onStartDig(player, spot)
 
 	-- A little extra range for internet lag
 	local flat = Vector3.new(spot.Position.X - root.Position.X, 0, spot.Position.Z - root.Position.Z)
-	if flat.Magnitude > Config.DigRange + 4 then
+	if flat.Magnitude > (rush and Config.RushReach or Config.DigRange) + 4 then
 		Remotes.Notify:FireClient(player, "Get closer to the dig spot.", "warning")
 		return nil
 	end
 
 	local zoneId = spot:GetAttribute("DigSpot")
-	if not data.zones[zoneId] then
+	if not rush and not data.zones[zoneId] then
 		local zone = Zones.ById[zoneId]
 		Remotes.Notify:FireClient(player, "Unlock " .. (zone and zone.name or zoneId) .. " to dig here.", "warning")
 		return nil
 	end
-	local readyAt = spotCooldowns[player] and spotCooldowns[player][spot]
+	local readyAt = not rush and spotCooldowns[player] and spotCooldowns[player][spot]
 	if readyAt and os.clock() < readyAt then
 		Remotes.Notify:FireClient(player, "You already dug here. Try another spot!", "warning")
 		return nil
@@ -278,7 +329,8 @@ local function onStartDig(player, spot)
 
 	lastDig[player] = os.clock()
 	nextDigId += 1
-	local charm = currentCharm(data)
+	-- Charms are only used up on finds, so Treasure Rush digs leave them alone
+	local charm = rush and Charms.ById[Charms.Default] or currentCharm(data)
 	local dig = {
 		id = nextDigId,
 		origin = root.Position,
@@ -286,6 +338,7 @@ local function onStartDig(player, spot)
 		spot = spot,
 		phase = "digging",
 		charm = charm,
+		rush = rush,
 	}
 	digs[player] = dig
 
@@ -313,27 +366,10 @@ local function onStartDig(player, spot)
 	return dig.id
 end
 
-local function onDigDone(player, digId, outcome, perfects)
-	local dig = digs[player]
-	if not dig or dig.id ~= digId or dig.phase ~= "minigame" then
-		return
-	end
-	if outcome ~= "found" then
-		lose(player, dig, "cracked")
-		return
-	end
-	-- Nobody can dig a find out faster than a perfect, non-stop tapper
-	if os.clock() - dig.readyAt < Dig.MinSeconds(dig.params) * 0.9 then
-		lose(player, dig, "cracked")
-		return
-	end
-	clearDig(player)
-	coolSpot(player, dig.spot)
-
-	perfects = math.clamp(math.floor(tonumber(perfects) or 0), 0, dig.params.strikes)
-	local find = Finds.ById[dig.find.id]
-	local found = dig.find
-	found.value = math.max(1, math.floor(found.value * Dig.ValueMultiplier(perfects, dig.params.strikes)))
+-- Puts a find in the backpack and the Collection, adds XP and level-up coins,
+-- tells the player (as dig result digId) and shows it off to everyone
+local function awardFind(player, digId, found, details)
+	local find = Finds.ById[found.id]
 	local levelBefore, levelAfter = 1, 1
 	local isNew, isRecord = DataService.Update(player, function(data)
 		found.uid = data.nextUid
@@ -362,29 +398,83 @@ local function onDigDone(player, digId, outcome, perfects)
 		return firstTime, record
 	end)
 
-	Remotes.DigResult:FireClient(player, digId, {
+	local result = {
 		id = found.id,
 		weight = found.weight,
 		value = found.value,
 		shiny = found.shiny,
-		perfects = perfects,
-		strikes = dig.params.strikes,
 		isNew = isNew,
 		isRecord = isRecord,
 		xp = Level.XpForFind(found.id, isNew),
-	})
+	}
+	for key, value in pairs(details) do
+		result[key] = value
+	end
+	Remotes.DigResult:FireClient(player, digId, result)
 	if levelAfter > levelBefore then
 		Remotes.Notify:FireClient(player, string.format("LEVEL UP! You're now a Lv %d digger. +%s coins", levelAfter, Format.Number(levelAfter * Level.CoinsPerLevel)), "rare")
 	end
 	DigService.ShowOff(player, found)
-	TutorialService.Event(player, "Find")
 	announce(player, find, found)
+end
+
+local function onDigDone(player, digId, outcome, perfects)
+	local dig = digs[player]
+	if not dig or dig.id ~= digId or dig.phase ~= "minigame" then
+		return
+	end
+	if outcome ~= "found" then
+		lose(player, dig, "cracked")
+		return
+	end
+	-- Nobody can dig a find out faster than a perfect, non-stop tapper
+	if os.clock() - dig.readyAt < Dig.MinSeconds(dig.params) * 0.9 then
+		lose(player, dig, "cracked")
+		return
+	end
+	clearDig(player)
+
+	if dig.rush then
+		local progress, target = RushService.AddDig(player)
+		Remotes.DigResult:FireClient(player, digId, { rush = true, progress = progress, target = target })
+		return
+	end
+	coolSpot(player, dig.spot)
+
+	perfects = math.clamp(math.floor(tonumber(perfects) or 0), 0, dig.params.strikes)
+	local found = dig.find
+	local buddy = player:GetAttribute("DigBuddy")
+	found.value = math.max(1, math.floor(found.value * Dig.ValueMultiplier(perfects, dig.params.strikes) * BuddyService.Multiplier(player)))
+	awardFind(player, digId, found, {
+		perfects = perfects,
+		strikes = dig.params.strikes,
+		buddy = buddy,
+	})
+	TutorialService.Event(player, "Find")
 
 	local data = DataService.Get(player)
 	local runtime = DataService.GetRuntime(player)
 	if data and runtime and #data.bag >= runtime.bagSize and ShopService.HasPass(player, "AutoSell") then
 		EconomyService.SellAll(player, true)
 	end
+end
+
+-- Treasure Rush loot: a find of at least this rarity from the best zone the
+-- player has unlocked. It goes in the backpack even if the backpack is full.
+function DigService.GiveRushLoot(player, minOrder)
+	local data = DataService.Get(player)
+	if not data or not player.Parent then
+		return
+	end
+	local zoneId = Zones.Default
+	for _, zone in ipairs(Zones.List) do
+		if data.zones[zone.id] then
+			zoneId = zone.id
+		end
+	end
+	local found = rollFind(data, zoneId, Charms.ById[Charms.Default], minOrder)
+	found.value = math.max(1, math.floor(found.value))
+	awardFind(player, "rush", found, { rushLoot = true })
 end
 
 -- The player holds the find up over their head for everyone to see

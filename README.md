@@ -7,10 +7,11 @@ The ready-to-open game file is [build/DigLegends.rbxlx](build/DigLegends.rbxlx).
 
 ## Status
 
-Step 3 of 6: all five zones are in. Steps 2 and 3 were play-tested in Roblox Studio on
-2026-10-27/28 with no script errors: level and coin unlocks (in order), digging in every zone,
-Collection pages, Master titles and the +5% page bonus.
-Still to come: Treasure Rush and dig buddies (step 4) and the shop setup (step 5).
+Step 4 of 6: multiplayer is in (Treasure Rush, dig buddies, server announcements), and the store
+art for step 5 is drawn. Steps 2 and 3 were play-tested in Roblox Studio on 2026-10-27/28 with no
+script errors: level and coin unlocks (in order), digging in every zone, Collection pages, Master
+titles and the +5% page bonus.
+Still to come: the pass and product ids (step 5), then launch (step 6).
 All shop ids are 0, so passes and cosmetics show "Coming soon".
 
 ## How to test in Roblox Studio
@@ -31,6 +32,10 @@ Test helper (Studio only, never in the live game): to get coins for testing the 
 `game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)`
 To reach a zone's level, add digger XP the same way: `game.ServerStorage.DigLegendsTest:Invoke("xp", 10000)`
 To fill a zone's Collection page: `game.ServerStorage.DigLegendsTest:Invoke("book", "desert")`
+To start a Treasure Rush right away: `game.ServerStorage.DigLegendsTest:Invoke("rush")`
+
+To try multiplayer, use Studio's **Test > Clients and Servers** with 2 players. In Studio every
+player counts as a friend, so the dig buddy bonus shows up there too.
 
 ## What's in the game so far
 
@@ -47,6 +52,13 @@ To fill a zone's Collection page: `game.ServerStorage.DigLegendsTest:Invoke("boo
 - **Collection** book, **Trading Post** with rotating in-demand finds, **Grandpa Gus's bounties**,
   digger levels, daily login reward, rebirths, weather and a weekly legend, global leaderboard.
 - **Dig Town hub** with shopkeepers, a starter patch, a VIP lounge, and bridges to each zone island.
+- **Treasure Rush:** every 15 minutes a glowing dig site pops up in Dig Town for 4 minutes. Good
+  digs there fill it up (more players in the server means more digs needed). When it is dug out,
+  every helper gets a guaranteed Rare or better find from their best zone, or Epic or better when
+  3 or more players helped. A button at the top of the screen takes you there.
+- **Dig buddies:** digging within 20 studs of a Roblox friend gives you both +10% coins per find.
+- **Announcements:** Legendary and Shiny finds (with a pillar of light) and completed Collection
+  pages are announced to the whole server.
 
 ## Monetization (never pay-to-win)
 
@@ -75,7 +87,10 @@ src/shared/              ReplicatedStorage.Shared (used by server and players)
 src/server/              ServerScriptService.Server
   DigService.luau        dig spots, digging down, rolling finds, checking results
   MapBuilder.luau        builds Dig Town and one island per zone if there is no Map folder
+  RushService.luau       the Treasure Rush dig site and its loot
+  BuddyService.luau      dig buddies (friends digging close together)
 src/client/              StarterPlayerScripts.Client
   Digging.luau           digging controls and the minigame on screen
 tools/build_place.py     rebuilds build/DigLegends.rbxlx from src/
+tools/make_store_art.py  draws the icon, thumbnails and pass/product icons into store/
 ```

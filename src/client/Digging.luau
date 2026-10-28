@@ -5,6 +5,8 @@
 --   3. The dig minigame: a marker slides along a bar. Tap while it is in the
 --      green to dig deeper; the gold middle is a perfect hit and makes the find
 --      worth more. Tapping outside the green cracks the find.
+--   A Treasure Rush site is dug the same way, but each good dig fills the
+--   site instead of finding something; the loot comes when it is dug out.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -129,6 +131,10 @@ local function hideSpot(spot)
 	end)
 end
 
+local function isRush(spot)
+	return spot ~= nil and spot:GetAttribute("TreasureRush") == true
+end
+
 local function isHidden(spot)
 	local untilTime = hiddenUntil[spot]
 	return untilTime ~= nil and os.clock() < untilTime
@@ -144,14 +150,17 @@ local function spotsNear(root)
 	local best, bestDistance = nil, math.huge
 	local any, anyDistance = nil, math.huge
 	for spot in pairs(spots) do
-		if spot.Parent then
+		if not spot.Parent or not spot:GetAttribute("DigSpot") then
+			spots[spot] = nil -- a Treasure Rush site that is over
+		else
+			local rush = isRush(spot)
 			local distance = flatDistance(spot.Position, root.Position)
-			if distance <= Config.DigRange then
+			if distance <= (rush and Config.RushReach or Config.DigRange) then
 				if distance < anyDistance then
 					any, anyDistance = spot, distance
 				end
 				local zoneId = spot:GetAttribute("DigSpot")
-				local unlocked = State.data and State.data.zones[zoneId]
+				local unlocked = rush or (State.data and State.data.zones[zoneId])
 				if unlocked and not isHidden(spot) and distance < bestDistance then
 					best, bestDistance = spot, distance
 				end
@@ -227,7 +236,7 @@ local function watchCharacter(character)
 	end)
 	character.ChildRemoved:Connect(function(child)
 		if child:IsA("Tool") and child.Name == SHOVEL_NAME and (phase == "digging" or phase == "minigame") then
-			if phase == "minigame" and digSpot then
+			if phase == "minigame" and digSpot and not isRush(digSpot) then
 				hideSpot(digSpot) -- the server uses up the spot too
 			end
 			Remotes.CancelDig:FireServer()
@@ -261,7 +270,8 @@ local function startMinigame(id, params)
 	}, { UI.corner(14) })
 	local outline = UI.stroke(rarity.color, 3)
 	outline.Parent = box
-	UI.label(string.format("??? (%s)", rarity.id), { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 26), TextColor3 = rarity.color, ZIndex = 22, Parent = box })
+	local title = params.rush and "TREASURE RUSH" or string.format("??? (%s)", rarity.id)
+	UI.label(title, { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 26), TextColor3 = params.rush and T.Gold or rarity.color, ZIndex = 22, Parent = box })
 
 	local barBack = UI.new("Frame", {
 		Position = UDim2.fromOffset(20, 44),
@@ -405,7 +415,9 @@ local function aimInfo(root)
 		return "Loading...", T.Muted, nil
 	end
 	local spot, any = spotsNear(root)
-	if spot then
+	if spot and isRush(spot) then
+		return "Click to dig the Treasure Rush!", T.Gold, spot
+	elseif spot then
 		return "Click to dig!", T.Good, spot
 	end
 	if any and isHidden(any) then
@@ -474,14 +486,16 @@ local function showFind(result)
 		Parent = screenGui,
 	}, { UI.corner(16), UI.stroke(rarity.color, 4), UI.padding(10), UI.list(4) })
 	local top = "Found!"
-	if result.isNew then
+	if result.rushLoot then
+		top = "TREASURE RUSH LOOT!"
+	elseif result.isNew then
 		top = "NEW FIND! Added to your Collection"
 	elseif result.isRecord then
 		top = "NEW PERSONAL RECORD!"
 	end
-	UI.label(top, { Size = UDim2.new(1, 0, 0, 22), TextColor3 = (result.isNew or result.isRecord) and T.Gold or T.Muted, Parent = card })
+	UI.label(top, { Size = UDim2.new(1, 0, 0, 22), TextColor3 = (result.isNew or result.isRecord or result.rushLoot) and T.Gold or T.Muted, Parent = card })
 	UI.label((result.shiny and "Shiny " or "") .. find.name, { Size = UDim2.new(1, 0, 0, 36), TextColor3 = rarity.color, Parent = card })
-	if result.isNew or result.isRecord or rarity.order >= 4 then
+	if result.isNew or result.isRecord or result.rushLoot or rarity.order >= 4 then
 		confetti({ rarity.color, T.Gold, Color3.new(1, 1, 1), T.Accent })
 		play("ping", 1.3)
 	end
@@ -491,10 +505,16 @@ local function showFind(result)
 		Parent = card,
 	})
 	local bonus = math.floor((Dig.ValueMultiplier(result.perfects or 0, result.strikes or 1) - 1) * 100 + 0.5)
-	UI.label(string.format("Perfect hits %d/%d  (+%d%% value)", result.perfects or 0, result.strikes or 0, bonus), {
+	local line = string.format("Perfect hits %d/%d  (+%d%% value)", result.perfects or 0, result.strikes or 0, bonus)
+	if result.rushLoot then
+		line = "Thanks for helping dig out the Treasure Rush!"
+	elseif result.buddy then
+		line ..= string.format("  -  Dig buddy +%d%%", math.floor(Config.BuddyBonus * 100 + 0.5))
+	end
+	UI.label(line, {
 		Size = UDim2.new(1, 0, 0, 20),
 		Font = T.BodyFont,
-		TextColor3 = bonus > 0 and T.Gold or T.Muted,
+		TextColor3 = (bonus > 0 or result.buddy or result.rushLoot) and T.Gold or T.Muted,
 		Parent = card,
 	})
 	task.delay(2.5, function()
@@ -579,15 +599,26 @@ function Digging.Init(gui)
 	end)
 
 	Remotes.DigResult.OnClientEvent:Connect(function(id, result, reason)
+		if id == "rush" then
+			showFind(result) -- Treasure Rush loot, which can come in the middle of another dig
+			return
+		end
 		if id ~= digId then
 			return
 		end
 		local spot = digSpot
 		reset()
-		if spot and (result or reason ~= "walked") then
+		if spot and not isRush(spot) and (result or reason ~= "walked") then
 			hideSpot(spot)
 		end
-		if result then
+		if result and result.rush then
+			if result.progress then
+				Notifications.Show(string.format("Treasure Rush: %d/%d dug!", result.progress, result.target), "coins")
+				play("ping", 1.1)
+			else
+				Notifications.Show("This Treasure Rush is already over.", "info")
+			end
+		elseif result then
 			showFind(result)
 		else
 			Notifications.Show(MESSAGES[reason] or MESSAGES.cracked, "warning")

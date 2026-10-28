@@ -9,6 +9,7 @@
 --   VipDoor     = true         door only VIP players can walk through
 --   Npc         = "Gus"        where a shopkeeper stands (see NpcService)
 --   GuideTarget = "DigPatch"   where Grandpa Gus's guide arrow points
+--   RushSite    = true         where the Treasure Rush dig site pops up (see RushService)
 
 local Workspace = game:GetService("Workspace")
 
@@ -529,6 +530,10 @@ function MapBuilder.Build()
 	end
 
 	lighthouse(scenery, Vector3.new(-62, GROUND_Y, -62))
+
+	-- The open square between the shops and the starter patch, where Treasure Rushes pop up
+	local rushSite = part({ Name = "RushSite", Size = Vector3.new(4, 1, 4), Position = Vector3.new(20, GROUND_Y, 8), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false, Parent = map })
+	rushSite:SetAttribute("RushSite", true)
 
 	npcSpot(scenery, "Ruby", Vector3.new(-35, GROUND_Y, -27.6))
 	npcSpot(scenery, "Digby", Vector3.new(35, GROUND_Y, -27.6))

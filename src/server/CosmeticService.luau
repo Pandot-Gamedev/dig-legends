@@ -10,6 +10,7 @@ local Finds = require(Shared.Finds)
 local Shop = require(Shared.Shop)
 local Remotes = require(Shared.Remotes)
 local Level = require(Shared.Level)
+local Zones = require(Shared.Zones)
 
 local DataService = require(script.Parent.DataService)
 local ShopService = require(script.Parent.ShopService)
@@ -182,6 +183,12 @@ local function checkEarnedTitles(player, data)
 	for _, title in ipairs(newTitles) do
 		if title.rule == "zoneBook" then
 			Remotes.Notify:FireClient(player, string.format("Collection page complete! +%d%% coins forever.", math.floor(Config.PageSellBonus * 100 + 0.5)), "rare")
+			local zone = Zones.ById[title.zone]
+			for _, other in ipairs(Players:GetPlayers()) do
+				if other ~= player then
+					Remotes.Notify:FireClient(other, string.format("%s completed the %s Collection page!", player.DisplayName, zone and zone.name or title.zone), "rare")
+				end
+			end
 		end
 		Remotes.Notify:FireClient(player, "New title unlocked: " .. title.text .. "! Equip it in the Shop.", "rare")
 	end

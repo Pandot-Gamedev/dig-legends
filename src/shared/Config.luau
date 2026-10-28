@@ -47,6 +47,21 @@ Config.TestPassesInStudio = false
 -- How long each weather lasts, in seconds
 Config.WeatherSeconds = 15 * 60
 
+-- Treasure Rush: a big shared dig site that pops up in Dig Town now and then.
+-- Everyone who helps dig it out gets a guaranteed good find.
+Config.RushFirstSeconds = 5 * 60 -- after the server starts
+Config.RushEverySeconds = 15 * 60
+Config.RushSeconds = 4 * 60 -- how long the site stays before it sinks back
+Config.RushDigs = 6 -- digs needed with one player in the server
+Config.RushDigsPerPlayer = 2 -- extra digs needed for each other player in the server
+Config.RushDigsMax = 24
+Config.RushTeamSize = 3 -- with this many helpers everyone gets Epic or better instead of Rare or better
+Config.RushReach = 12 -- the site is big, so it can be dug from further away
+
+-- Dig buddies: digging near a Roblox friend gives both of you more coins
+Config.BuddyRange = 20
+Config.BuddyBonus = 0.1
+
 function Config.RebirthCost(rebirths)
 	return math.floor(Config.RebirthBaseCost * Config.RebirthCostGrowth ^ rebirths)
 end

@@ -1,5 +1,8 @@
--- Always-on screen info: coins, bag, the weekly event, and the menu buttons.
+-- Always-on screen info: coins, bag, the weekly event, Treasure Rush and dig
+-- buddy news, and the menu buttons.
 
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -14,6 +17,7 @@ local Format = require(Shared.Format)
 local UI = require(script.Parent.UI)
 local State = require(script.Parent.State)
 local Panels = require(script.Parent.Panels)
+local Notifications = require(script.Parent.Notifications)
 local CameraController = require(script.Parent.CameraController)
 local T = UI.Theme
 
@@ -82,6 +86,60 @@ function Hud.Init(screenGui)
 			local weather, weatherLeft = Events.GetWeather()
 			weatherLine.Text = string.format("%s: %s (%s)", weather.name, weather.description, Format.Duration(weatherLeft))
 			task.wait(1)
+		end
+	end)
+
+	-- Treasure Rush and dig buddy news, under the banner. The rush line is a
+	-- button that takes you to Dig Town, where the rush site is.
+	local news = UI.new("Frame", {
+		Name = "News",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 70),
+		Size = UDim2.fromOffset(520, 70),
+		BackgroundTransparency = 1,
+		Parent = screenGui,
+	}, { UI.list(4) })
+	local rushButton = UI.button("", Color3.fromRGB(200, 140, 30), function()
+		local ok, message = State.Action("Teleport", "hub")
+		if not ok and message then
+			Notifications.Show(message, "warning")
+		end
+	end, { Name = "Rush", Size = UDim2.new(1, 0, 0, 34), Visible = false, LayoutOrder = 1, Parent = news })
+	local buddyLine = UI.label("", {
+		Name = "Buddy",
+		Size = UDim2.new(1, 0, 0, 22),
+		TextColor3 = T.Good,
+		TextStrokeTransparency = 0.4,
+		Visible = false,
+		LayoutOrder = 2,
+		Parent = news,
+	})
+	local player = Players.LocalPlayer
+	local function updateBuddy()
+		local buddy = player:GetAttribute("DigBuddy")
+		buddyLine.Visible = buddy ~= nil
+		buddyLine.Text = buddy and string.format("Dig buddy: %s is near, +%d%% coins for you both", buddy, math.floor(Config.BuddyBonus * 100 + 0.5)) or ""
+	end
+	player:GetAttributeChangedSignal("DigBuddy"):Connect(updateBuddy)
+	updateBuddy()
+	task.spawn(function()
+		while true do
+			-- Make room for Grandpa Gus's guide card while it shows
+			local guide = screenGui:FindFirstChild("GuideCard")
+			news.Position = UDim2.new(0.5, 0, 0, guide and guide.Visible and 134 or 70)
+			local active = ReplicatedStorage:GetAttribute("RushActive") == true
+			rushButton.Visible = active
+			if active then
+				local left = math.max(0, (ReplicatedStorage:GetAttribute("RushEndsAt") or 0) - Events.Now())
+				rushButton.Text = string.format(
+					"TREASURE RUSH in Dig Town! %d/%d dug, %s left. %s to go",
+					ReplicatedStorage:GetAttribute("RushProgress") or 0,
+					ReplicatedStorage:GetAttribute("RushTarget") or 0,
+					Format.Duration(left),
+					UserInputService.MouseEnabled and "Click" or "Tap"
+				)
+			end
+			task.wait(0.5)
 		end
 	end)
 

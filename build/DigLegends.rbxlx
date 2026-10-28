@@ -183,6 +183,21 @@ Config.TestPassesInStudio = false
 -- How long each weather lasts, in seconds
 Config.WeatherSeconds = 15 * 60
 
+-- Treasure Rush: a big shared dig site that pops up in Dig Town now and then.
+-- Everyone who helps dig it out gets a guaranteed good find.
+Config.RushFirstSeconds = 5 * 60 -- after the server starts
+Config.RushEverySeconds = 15 * 60
+Config.RushSeconds = 4 * 60 -- how long the site stays before it sinks back
+Config.RushDigs = 6 -- digs needed with one player in the server
+Config.RushDigsPerPlayer = 2 -- extra digs needed for each other player in the server
+Config.RushDigsMax = 24
+Config.RushTeamSize = 3 -- with this many helpers everyone gets Epic or better instead of Rare or better
+Config.RushReach = 12 -- the site is big, so it can be dug from further away
+
+-- Dig buddies: digging near a Roblox friend gives both of you more coins
+Config.BuddyRange = 20
+Config.BuddyBonus = 0.1
+
 function Config.RebirthCost(rebirths)
 	return math.floor(Config.RebirthBaseCost * Config.RebirthCostGrowth ^ rebirths)
 end
@@ -951,7 +966,7 @@ function Zones.Previous(zoneId)
 end
 
 return Zones
-]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX0000001C"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000001B"><Properties><string name="Name">Server</string><ProtectedString name="Source"><![CDATA[-- Dig Legends server. Starts every service in order.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX0000001E"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000001D"><Properties><string name="Name">Server</string><ProtectedString name="Source"><![CDATA[-- Dig Legends server. Starts every service in order.
 
 local MapBuilder = require(script.MapBuilder)
 local DataService = require(script.DataService)
@@ -962,6 +977,8 @@ local EconomyService = require(script.EconomyService)
 local CosmeticService = require(script.CosmeticService)
 local DigService = require(script.DigService)
 local WorldService = require(script.WorldService)
+local RushService = require(script.RushService)
+local BuddyService = require(script.BuddyService)
 local Finds = require(game:GetService("ReplicatedStorage").Shared.Finds)
 
 MapBuilder.Build()
@@ -973,6 +990,8 @@ EconomyService.Start()
 CosmeticService.Start()
 DigService.Start()
 WorldService.Start()
+RushService.Start(DigService.GiveRushLoot)
+BuddyService.Start()
 NpcService.Start()
 DataService.Start()
 
@@ -981,10 +1000,15 @@ DataService.Start()
 --   game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)
 --   game.ServerStorage.DigLegendsTest:Invoke("xp", 10000)
 --   game.ServerStorage.DigLegendsTest:Invoke("book", "desert") -- fills that Collection page
+--   game.ServerStorage.DigLegendsTest:Invoke("rush") -- starts a Treasure Rush now
 if game:GetService("RunService"):IsStudio() then
 	local test = Instance.new("BindableFunction")
 	test.Name = "DigLegendsTest"
 	test.OnInvoke = function(command, amount)
+		if command == "rush" then
+			RushService.Begin()
+			return "ok"
+		end
 		for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
 			DataService.Update(player, function(data)
 				if command == "coins" then
@@ -1004,7 +1028,116 @@ if game:GetService("RunService"):IsStudio() then
 end
 
 print("[Dig Legends] Server ready")
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">CosmeticService</string><ProtectedString name="Source"><![CDATA[-- Shows each player's name tag (name, digger level, title, VIP) and cosmetics:
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">BuddyService</string><ProtectedString name="Source"><![CDATA[-- Dig buddies: digging within 20 studs of a Roblox friend gives both of you
+-- +10% coins for everything you dig up there. Each player's current buddy is
+-- kept in their "DigBuddy" attribute (the friend's display name), which
+-- DigService reads when a find comes up and the HUD shows on screen.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+
+local BuddyService = {}
+
+local CHECK_SECONDS = 1
+local TIP_COOLDOWN = 120 -- seconds between "dig buddy" toasts for one player
+
+local friends = {} -- ["lowId:highId"] = true / false (nil while Roblox hasn't answered)
+local asking = {}
+local lastTip = {} -- [player] = os.clock()
+
+local function pairKey(a, b)
+	return math.min(a.UserId, b.UserId) .. ":" .. math.max(a.UserId, b.UserId)
+end
+
+local function areFriends(a, b)
+	-- Test players in Studio are never real friends, so count everyone there
+	if RunService:IsStudio() then
+		return true
+	end
+	local key = pairKey(a, b)
+	if friends[key] == nil and not asking[key] then
+		asking[key] = true
+		task.spawn(function()
+			local ok, result = pcall(a.IsFriendsWith, a, b.UserId)
+			if ok then
+				friends[key] = result
+			end
+			-- If Roblox didn't answer, ask again on a later check
+			task.delay(ok and 0 or 30, function()
+				asking[key] = nil
+			end)
+		end)
+	end
+	return friends[key] == true
+end
+
+local function rootOf(player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if humanoid and humanoid.Health > 0 then
+		return root
+	end
+	return nil
+end
+
+local function check()
+	local players = Players:GetPlayers()
+	for _, player in ipairs(players) do
+		local root = rootOf(player)
+		local buddy, closest = nil, Config.BuddyRange
+		if root then
+			for _, other in ipairs(players) do
+				local otherRoot = other ~= player and rootOf(other)
+				if otherRoot then
+					local distance = (otherRoot.Position - root.Position).Magnitude
+					if distance <= closest and areFriends(player, other) then
+						buddy, closest = other, distance
+					end
+				end
+			end
+		end
+		local name = buddy and buddy.DisplayName or nil
+		if name and not player:GetAttribute("DigBuddy") and os.clock() - (lastTip[player] or -math.huge) > TIP_COOLDOWN then
+			lastTip[player] = os.clock()
+			Remotes.Notify:FireClient(player, string.format("Dig buddy! Digging near %s gives you both +%d%% coins.", name, math.floor(Config.BuddyBonus * 100 + 0.5)), "success")
+		end
+		if player:GetAttribute("DigBuddy") ~= name then
+			player:SetAttribute("DigBuddy", name)
+		end
+	end
+end
+
+-- The coin multiplier for a find this player digs up right now
+function BuddyService.Multiplier(player)
+	return player:GetAttribute("DigBuddy") and 1 + Config.BuddyBonus or 1
+end
+
+function BuddyService.Start()
+	task.spawn(function()
+		while true do
+			task.wait(CHECK_SECONDS)
+			check()
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		lastTip[player] = nil
+		local id = tostring(player.UserId)
+		for key in pairs(friends) do
+			local low, high = key:match("^(-?%d+):(-?%d+)$")
+			if low == id or high == id then
+				friends[key] = nil
+			end
+		end
+	end)
+end
+
+return BuddyService
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">CosmeticService</string><ProtectedString name="Source"><![CDATA[-- Shows each player's name tag (name, digger level, title, VIP) and cosmetics:
 -- trails, shovel skins and VIP extras.
 -- Also hands out free titles players earn by playing.
 
@@ -1016,6 +1149,7 @@ local Finds = require(Shared.Finds)
 local Shop = require(Shared.Shop)
 local Remotes = require(Shared.Remotes)
 local Level = require(Shared.Level)
+local Zones = require(Shared.Zones)
 
 local DataService = require(script.Parent.DataService)
 local ShopService = require(script.Parent.ShopService)
@@ -1188,6 +1322,12 @@ local function checkEarnedTitles(player, data)
 	for _, title in ipairs(newTitles) do
 		if title.rule == "zoneBook" then
 			Remotes.Notify:FireClient(player, string.format("Collection page complete! +%d%% coins forever.", math.floor(Config.PageSellBonus * 100 + 0.5)), "rare")
+			local zone = Zones.ById[title.zone]
+			for _, other in ipairs(Players:GetPlayers()) do
+				if other ~= player then
+					Remotes.Notify:FireClient(other, string.format("%s completed the %s Collection page!", player.DisplayName, zone and zone.name or title.zone), "rare")
+				end
+			end
 		end
 		Remotes.Notify:FireClient(player, "New title unlocked: " .. title.text .. "! Equip it in the Shop.", "rare")
 	end
@@ -1219,7 +1359,7 @@ function CosmeticService.Start()
 end
 
 return CosmeticService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">DataService</string><ProtectedString name="Source"><![CDATA[-- Loads, saves and hands out each player's save data.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">DataService</string><ProtectedString name="Source"><![CDATA[-- Loads, saves and hands out each player's save data.
 -- Other scripts change data with DataService.Update(player, function(data) ... end)
 -- so the player's screen and leaderboard always refresh afterwards.
 
@@ -1520,7 +1660,7 @@ function DataService.Start()
 end
 
 return DataService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">DigService</string><ProtectedString name="Source"><![CDATA[-- Dig spots, digging down and finds. The server decides what is buried and
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">DigService</string><ProtectedString name="Source"><![CDATA[-- Dig spots, digging down and finds. The server decides what is buried and
 -- checks the timing, so players can't pick their own finds. The dig minigame
 -- runs on the player's screen using the shared Dig rules.
 --
@@ -1549,6 +1689,8 @@ local ShopService = require(script.Parent.ShopService)
 local EconomyService = require(script.Parent.EconomyService)
 local CosmeticService = require(script.Parent.CosmeticService)
 local TutorialService = require(script.Parent.TutorialService)
+local RushService = require(script.Parent.RushService)
+local BuddyService = require(script.Parent.BuddyService)
 
 local DigService = {}
 
@@ -1618,8 +1760,9 @@ local function currentCharm(data)
 	return charm
 end
 
--- Pick what is buried, using shovel luck, the charm, weather and the weekly event
-local function rollFind(data, zoneId, charm)
+-- Pick what is buried, using shovel luck, the charm, weather and the weekly event.
+-- minOrder (optional) skips rarities below it, e.g. Rare or better for Treasure Rush loot.
+local function rollFind(data, zoneId, charm, minOrder)
 	local shovel = Shovels.ById[data.equippedShovel] or Shovels.ById[Shovels.Default]
 	local weather = Events.GetWeather()
 	local eventFind = Events.GetEventFind()
@@ -1633,7 +1776,7 @@ local function rollFind(data, zoneId, charm)
 	local choices = {}
 	local total = 0
 	for _, rarity in ipairs(Finds.Rarities) do
-		if byRarity[rarity.id] then
+		if byRarity[rarity.id] and rarity.order >= (minOrder or 1) then
 			local weight = rarity.weight
 			if rarity.order >= 3 then
 				weight *= shovel.luck * (weather.luckMultiplier or 1) * (charm.luck or 1)
@@ -1646,6 +1789,9 @@ local function rollFind(data, zoneId, charm)
 		end
 	end
 
+	if #choices == 0 then
+		return rollFind(data, zoneId, charm)
+	end
 	local pick = random:NextNumber(0, total)
 	local chosen = choices[1].rarity
 	for _, choice in ipairs(choices) do
@@ -1682,15 +1828,43 @@ local function rollFind(data, zoneId, charm)
 	}
 end
 
+-- A pillar of light over the player for a few seconds, seen by everyone
+local function beacon(player, color)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	local pillar = Instance.new("Part")
+	pillar.Name = "FindBeacon"
+	pillar.Shape = Enum.PartType.Cylinder
+	pillar.Size = Vector3.new(60, 2.5, 2.5)
+	pillar.CFrame = CFrame.new(root.Position + Vector3.new(0, 28, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	pillar.Anchored = true
+	pillar.CanCollide = false
+	pillar.CanQuery = false
+	pillar.CanTouch = false
+	pillar.CastShadow = false
+	pillar.Material = Enum.Material.Neon
+	pillar.Color = color
+	pillar.Transparency = 0.45
+	pillar.Parent = Workspace
+	task.delay(4, function()
+		pillar:Destroy()
+	end)
+end
+
+-- Legendary and Shiny finds are announced to the whole server
 local function announce(player, find, found)
 	local rarity = Finds.RarityById[find.rarity]
-	if rarity.order < 5 then
+	if rarity.order < 5 and not found.shiny then
 		return
 	end
 	local text = string.format("%s dug up a %s%s %s!", player.DisplayName, found.shiny and "Shiny " or "", find.rarity, find.name)
 	for _, other in ipairs(Players:GetPlayers()) do
 		Remotes.Notify:FireClient(other, text, "rare")
 	end
+	beacon(player, rarity.color)
 end
 
 local function coolSpot(player, spot)
@@ -1705,7 +1879,7 @@ local function lose(player, dig, reason)
 	end
 	-- Once the find is rolled the spot is used up, however the dig ends. Otherwise
 	-- players could put the shovel away to reroll a find they don't like.
-	if dig.phase == "minigame" then
+	if dig.phase == "minigame" and not dig.rush then
 		coolSpot(player, dig.spot)
 	end
 	Remotes.DigResult:FireClient(player, dig.id, nil, reason)
@@ -1717,6 +1891,23 @@ local function onReady(player, dig)
 	end
 	local data = DataService.Get(player)
 	if not data then
+		return
+	end
+
+	local shovel = Shovels.ById[data.equippedShovel] or Shovels.ById[Shovels.Default]
+	if dig.rush then
+		-- Treasure Rush digs don't find anything themselves; each good one fills the site
+		dig.params = Dig.Params(Finds.RarityById.Uncommon, shovel)
+		dig.params.rush = true
+		dig.phase = "minigame"
+		dig.readyAt = os.clock()
+		dirtBurst(dig.spot, 12)
+		Remotes.DigReady:FireClient(player, dig.id, dig.params)
+		task.delay(Dig.MaxSeconds + 5, function()
+			if digs[player] == dig then
+				lose(player, dig, "timeout")
+			end
+		end)
 		return
 	end
 
@@ -1733,7 +1924,6 @@ local function onReady(player, dig)
 		end)
 	end
 
-	local shovel = Shovels.ById[data.equippedShovel] or Shovels.ById[Shovels.Default]
 	dig.find = rollFind(data, dig.zone, charm)
 	dig.rarity = Finds.RarityById[Finds.ById[dig.find.id].rarity]
 	dig.params = Dig.Params(dig.rarity, shovel)
@@ -1768,7 +1958,8 @@ local function onStartDig(player, spot)
 		return nil
 	end
 
-	if #data.bag >= runtime.bagSize then
+	local rush = RushService.IsSite(spot)
+	if not rush and #data.bag >= runtime.bagSize then
 		if ShopService.HasPass(player, "AutoSell") then
 			EconomyService.SellAll(player, true)
 		end
@@ -1781,18 +1972,18 @@ local function onStartDig(player, spot)
 
 	-- A little extra range for internet lag
 	local flat = Vector3.new(spot.Position.X - root.Position.X, 0, spot.Position.Z - root.Position.Z)
-	if flat.Magnitude > Config.DigRange + 4 then
+	if flat.Magnitude > (rush and Config.RushReach or Config.DigRange) + 4 then
 		Remotes.Notify:FireClient(player, "Get closer to the dig spot.", "warning")
 		return nil
 	end
 
 	local zoneId = spot:GetAttribute("DigSpot")
-	if not data.zones[zoneId] then
+	if not rush and not data.zones[zoneId] then
 		local zone = Zones.ById[zoneId]
 		Remotes.Notify:FireClient(player, "Unlock " .. (zone and zone.name or zoneId) .. " to dig here.", "warning")
 		return nil
 	end
-	local readyAt = spotCooldowns[player] and spotCooldowns[player][spot]
+	local readyAt = not rush and spotCooldowns[player] and spotCooldowns[player][spot]
 	if readyAt and os.clock() < readyAt then
 		Remotes.Notify:FireClient(player, "You already dug here. Try another spot!", "warning")
 		return nil
@@ -1800,7 +1991,8 @@ local function onStartDig(player, spot)
 
 	lastDig[player] = os.clock()
 	nextDigId += 1
-	local charm = currentCharm(data)
+	-- Charms are only used up on finds, so Treasure Rush digs leave them alone
+	local charm = rush and Charms.ById[Charms.Default] or currentCharm(data)
 	local dig = {
 		id = nextDigId,
 		origin = root.Position,
@@ -1808,6 +2000,7 @@ local function onStartDig(player, spot)
 		spot = spot,
 		phase = "digging",
 		charm = charm,
+		rush = rush,
 	}
 	digs[player] = dig
 
@@ -1835,27 +2028,10 @@ local function onStartDig(player, spot)
 	return dig.id
 end
 
-local function onDigDone(player, digId, outcome, perfects)
-	local dig = digs[player]
-	if not dig or dig.id ~= digId or dig.phase ~= "minigame" then
-		return
-	end
-	if outcome ~= "found" then
-		lose(player, dig, "cracked")
-		return
-	end
-	-- Nobody can dig a find out faster than a perfect, non-stop tapper
-	if os.clock() - dig.readyAt < Dig.MinSeconds(dig.params) * 0.9 then
-		lose(player, dig, "cracked")
-		return
-	end
-	clearDig(player)
-	coolSpot(player, dig.spot)
-
-	perfects = math.clamp(math.floor(tonumber(perfects) or 0), 0, dig.params.strikes)
-	local find = Finds.ById[dig.find.id]
-	local found = dig.find
-	found.value = math.max(1, math.floor(found.value * Dig.ValueMultiplier(perfects, dig.params.strikes)))
+-- Puts a find in the backpack and the Collection, adds XP and level-up coins,
+-- tells the player (as dig result digId) and shows it off to everyone
+local function awardFind(player, digId, found, details)
+	local find = Finds.ById[found.id]
 	local levelBefore, levelAfter = 1, 1
 	local isNew, isRecord = DataService.Update(player, function(data)
 		found.uid = data.nextUid
@@ -1884,29 +2060,83 @@ local function onDigDone(player, digId, outcome, perfects)
 		return firstTime, record
 	end)
 
-	Remotes.DigResult:FireClient(player, digId, {
+	local result = {
 		id = found.id,
 		weight = found.weight,
 		value = found.value,
 		shiny = found.shiny,
-		perfects = perfects,
-		strikes = dig.params.strikes,
 		isNew = isNew,
 		isRecord = isRecord,
 		xp = Level.XpForFind(found.id, isNew),
-	})
+	}
+	for key, value in pairs(details) do
+		result[key] = value
+	end
+	Remotes.DigResult:FireClient(player, digId, result)
 	if levelAfter > levelBefore then
 		Remotes.Notify:FireClient(player, string.format("LEVEL UP! You're now a Lv %d digger. +%s coins", levelAfter, Format.Number(levelAfter * Level.CoinsPerLevel)), "rare")
 	end
 	DigService.ShowOff(player, found)
-	TutorialService.Event(player, "Find")
 	announce(player, find, found)
+end
+
+local function onDigDone(player, digId, outcome, perfects)
+	local dig = digs[player]
+	if not dig or dig.id ~= digId or dig.phase ~= "minigame" then
+		return
+	end
+	if outcome ~= "found" then
+		lose(player, dig, "cracked")
+		return
+	end
+	-- Nobody can dig a find out faster than a perfect, non-stop tapper
+	if os.clock() - dig.readyAt < Dig.MinSeconds(dig.params) * 0.9 then
+		lose(player, dig, "cracked")
+		return
+	end
+	clearDig(player)
+
+	if dig.rush then
+		local progress, target = RushService.AddDig(player)
+		Remotes.DigResult:FireClient(player, digId, { rush = true, progress = progress, target = target })
+		return
+	end
+	coolSpot(player, dig.spot)
+
+	perfects = math.clamp(math.floor(tonumber(perfects) or 0), 0, dig.params.strikes)
+	local found = dig.find
+	local buddy = player:GetAttribute("DigBuddy")
+	found.value = math.max(1, math.floor(found.value * Dig.ValueMultiplier(perfects, dig.params.strikes) * BuddyService.Multiplier(player)))
+	awardFind(player, digId, found, {
+		perfects = perfects,
+		strikes = dig.params.strikes,
+		buddy = buddy,
+	})
+	TutorialService.Event(player, "Find")
 
 	local data = DataService.Get(player)
 	local runtime = DataService.GetRuntime(player)
 	if data and runtime and #data.bag >= runtime.bagSize and ShopService.HasPass(player, "AutoSell") then
 		EconomyService.SellAll(player, true)
 	end
+end
+
+-- Treasure Rush loot: a find of at least this rarity from the best zone the
+-- player has unlocked. It goes in the backpack even if the backpack is full.
+function DigService.GiveRushLoot(player, minOrder)
+	local data = DataService.Get(player)
+	if not data or not player.Parent then
+		return
+	end
+	local zoneId = Zones.Default
+	for _, zone in ipairs(Zones.List) do
+		if data.zones[zone.id] then
+			zoneId = zone.id
+		end
+	end
+	local found = rollFind(data, zoneId, Charms.ById[Charms.Default], minOrder)
+	found.value = math.max(1, math.floor(found.value))
+	awardFind(player, "rush", found, { rushLoot = true })
 end
 
 -- The player holds the find up over their head for everyone to see
@@ -2063,7 +2293,7 @@ function DigService.Start()
 end
 
 return DigService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">EconomyService</string><ProtectedString name="Source"><![CDATA[-- Coins: the Trading Post, charms, bounties, shovels, zones, rebirths and daily
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">EconomyService</string><ProtectedString name="Source"><![CDATA[-- Coins: the Trading Post, charms, bounties, shovels, zones, rebirths and daily
 -- rewards, plus the menu buttons players press (all go through the "Action" remote).
 
 local Workspace = game:GetService("Workspace")
@@ -2536,7 +2766,7 @@ function EconomyService.Start()
 end
 
 return EconomyService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds a simple starter world (Dig Town + one island per zone) when the place
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds a simple starter world (Dig Town + one island per zone) when the place
 -- has no folder called "Map" in Workspace. That means the game is playable the
 -- moment you press Play. To use your own scenery later, the game only cares
 -- about parts with these attributes:
@@ -2547,6 +2777,7 @@ return EconomyService
 --   VipDoor     = true         door only VIP players can walk through
 --   Npc         = "Gus"        where a shopkeeper stands (see NpcService)
 --   GuideTarget = "DigPatch"   where Grandpa Gus's guide arrow points
+--   RushSite    = true         where the Treasure Rush dig site pops up (see RushService)
 
 local Workspace = game:GetService("Workspace")
 
@@ -3068,6 +3299,10 @@ function MapBuilder.Build()
 
 	lighthouse(scenery, Vector3.new(-62, GROUND_Y, -62))
 
+	-- The open square between the shops and the starter patch, where Treasure Rushes pop up
+	local rushSite = part({ Name = "RushSite", Size = Vector3.new(4, 1, 4), Position = Vector3.new(20, GROUND_Y, 8), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false, Parent = map })
+	rushSite:SetAttribute("RushSite", true)
+
 	npcSpot(scenery, "Ruby", Vector3.new(-35, GROUND_Y, -27.6))
 	npcSpot(scenery, "Digby", Vector3.new(35, GROUND_Y, -27.6))
 	npcSpot(scenery, "Clover", Vector3.new(-35, GROUND_Y, 5.4))
@@ -3204,7 +3439,7 @@ function MapBuilder.Build()
 end
 
 return MapBuilder
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">NpcService</string><ProtectedString name="Source"><![CDATA[-- Shopkeepers and Grandpa Gus. They stand on parts with an "Npc" attribute
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">NpcService</string><ProtectedString name="Source"><![CDATA[-- Shopkeepers and Grandpa Gus. They stand on parts with an "Npc" attribute
 -- (MapBuilder places them at each stall) and face the way that part faces.
 
 local Players = game:GetService("Players")
@@ -3316,7 +3551,343 @@ function NpcService.Start()
 end
 
 return NpcService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">ShopService</string><ProtectedString name="Source"><![CDATA[-- Robux purchases: game passes (VIP, Auto Sell, Big Backpack, Teleporter) and
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">RushService</string><ProtectedString name="Source"><![CDATA[-- Treasure Rush: every 15 minutes a big glowing dig site pops up in Dig Town.
+-- Everyone digs it with the normal dig minigame, and every good dig fills the
+-- site a bit. When it is full, every helper gets a guaranteed Rare or better
+-- find from the best zone they have unlocked (Epic or better when 3 or more
+-- players helped). Nobody shares a find, so helping never costs anything.
+--
+-- Players' screens follow the rush through attributes on ReplicatedStorage:
+--   RushActive (bool), RushProgress, RushTarget, RushHelpers, RushEndsAt (server time)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Finds = require(Shared.Finds)
+local Events = require(Shared.Events)
+local Format = require(Shared.Format)
+local Remotes = require(Shared.Remotes)
+
+local RushService = {}
+
+local DEFAULT_SITE = Vector3.new(20, 3, 8) -- used when the map has no RushSite part
+local GOLD = Color3.fromRGB(255, 200, 60)
+
+local rush = nil -- the rush going on right now, if any
+local giveLoot = nil -- function(player, minRarityOrder), set in Start
+
+local function notifyAll(text, kind)
+	for _, player in ipairs(Players:GetPlayers()) do
+		Remotes.Notify:FireClient(player, text, kind)
+	end
+end
+
+local function sitePosition()
+	for _, item in ipairs(Workspace:GetDescendants()) do
+		if item:IsA("BasePart") and item:GetAttribute("RushSite") then
+			return item.Position
+		end
+	end
+	return DEFAULT_SITE
+end
+
+local function publish()
+	ReplicatedStorage:SetAttribute("RushActive", rush ~= nil)
+	ReplicatedStorage:SetAttribute("RushProgress", rush and rush.progress or 0)
+	ReplicatedStorage:SetAttribute("RushTarget", rush and rush.target or 0)
+	ReplicatedStorage:SetAttribute("RushHelpers", rush and rush.helperCount or 0)
+	ReplicatedStorage:SetAttribute("RushEndsAt", rush and rush.endsAt or 0)
+end
+
+local function part(props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for key, value in pairs(props) do
+		if key ~= "Parent" then
+			p[key] = value
+		end
+	end
+	p.Parent = props.Parent
+	return p
+end
+
+-- A mound of dirt with a half-buried chest, a beam of light and a sign that
+-- shows how much is dug
+local function buildSite(at)
+	local model = Instance.new("Model")
+	model.Name = "TreasureRush"
+
+	local mound = part({
+		Name = "RushMound",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1.2, 12, 12),
+		CFrame = CFrame.new(at.X, at.Y + 0.2, at.Z) * CFrame.Angles(0, 0, math.rad(90)),
+		Material = Enum.Material.Ground,
+		Color = Color3.fromRGB(120, 85, 50),
+		CanCollide = false,
+		Parent = model,
+	})
+	-- The mound is the dig spot: DigService and the players' screens look for this
+	mound:SetAttribute("DigSpot", "rush")
+	mound:SetAttribute("TreasureRush", true)
+
+	local chest = part({ Name = "Chest", Size = Vector3.new(5, 2.6, 3.4), CFrame = CFrame.new(at.X, at.Y + 1.1, at.Z) * CFrame.Angles(math.rad(-12), math.rad(20), 0), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(130, 80, 40), Parent = model })
+	part({ Name = "ChestLid", Size = Vector3.new(5.1, 0.9, 3.5), CFrame = chest.CFrame * CFrame.new(0, 1.7, 0), Material = Enum.Material.WoodPlanks, Color = Color3.fromRGB(150, 95, 50), Parent = model })
+	for _, x in ipairs({ -1.8, 1.8 }) do
+		part({ Name = "ChestBand", Size = Vector3.new(0.4, 3.6, 3.6), CFrame = chest.CFrame * CFrame.new(x, 0.45, 0), Material = Enum.Material.Metal, Color = GOLD, CanCollide = false, Parent = model })
+	end
+
+	local beam = part({
+		Name = "RushBeam",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(120, 3, 3),
+		CFrame = CFrame.new(at.X, at.Y + 60, at.Z) * CFrame.Angles(0, 0, math.rad(90)),
+		Material = Enum.Material.Neon,
+		Color = GOLD,
+		Transparency = 0.55,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+		CastShadow = false,
+		Parent = model,
+	})
+
+	local light = Instance.new("PointLight")
+	light.Color = GOLD
+	light.Range = 22
+	light.Brightness = 2
+	light.Parent = chest
+
+	local sparkles = Instance.new("ParticleEmitter")
+	sparkles.Name = "Sparkle"
+	sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	sparkles.Color = ColorSequence.new(GOLD)
+	sparkles.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 0) })
+	sparkles.Lifetime = NumberRange.new(1, 1.8)
+	sparkles.Speed = NumberRange.new(3, 7)
+	sparkles.SpreadAngle = Vector2.new(70, 70)
+	sparkles.EmissionDirection = Enum.NormalId.Right -- the mound lies on its side, so +X points up
+	sparkles.Rate = 25
+	sparkles.Parent = mound
+
+	local dirt = Instance.new("ParticleEmitter")
+	dirt.Name = "Dirt"
+	dirt.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	dirt.Color = ColorSequence.new(Color3.fromRGB(120, 85, 55))
+	dirt.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.8), NumberSequenceKeypoint.new(1, 2) })
+	dirt.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+	dirt.Lifetime = NumberRange.new(0.5, 0.9)
+	dirt.Speed = NumberRange.new(8, 14)
+	dirt.SpreadAngle = Vector2.new(40, 40)
+	dirt.Acceleration = Vector3.new(0, -35, 0)
+	dirt.EmissionDirection = Enum.NormalId.Right
+	dirt.Rate = 0
+	dirt.Parent = mound
+
+	-- The sign floats over the chest and can be seen from across town
+	local signHolder = part({ Name = "RushSign", Size = Vector3.new(1, 1, 1), Position = at + Vector3.new(0, 9, 0), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false, Parent = model })
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(260, 92)
+	gui.LightInfluence = 0
+	gui.MaxDistance = 400
+	gui.Parent = signHolder
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, 0, 0, 34)
+	title.BackgroundTransparency = 1
+	title.Text = "TREASURE RUSH!"
+	title.TextScaled = true
+	title.Font = Enum.Font.FredokaOne
+	title.TextColor3 = GOLD
+	title.TextStrokeTransparency = 0.2
+	title.Parent = gui
+	local barBack = Instance.new("Frame")
+	barBack.Position = UDim2.fromOffset(10, 40)
+	barBack.Size = UDim2.new(1, -20, 0, 20)
+	barBack.BackgroundColor3 = Color3.fromRGB(40, 30, 20)
+	barBack.Parent = gui
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = barBack
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BackgroundColor3 = GOLD
+	fill.Parent = barBack
+	corner:Clone().Parent = fill
+	local info = Instance.new("TextLabel")
+	info.Position = UDim2.fromOffset(0, 64)
+	info.Size = UDim2.new(1, 0, 0, 26)
+	info.BackgroundTransparency = 1
+	info.TextScaled = true
+	info.Font = Enum.Font.GothamBold
+	info.TextColor3 = Color3.new(1, 1, 1)
+	info.TextStrokeTransparency = 0.2
+	info.Parent = gui
+
+	model.PrimaryPart = mound
+	model.Parent = Workspace
+	return {
+		model = model,
+		mound = mound,
+		chest = chest,
+		beam = beam,
+		fill = fill,
+		info = info,
+		title = title,
+	}
+end
+
+local function refreshSign()
+	if not rush then
+		return
+	end
+	local site = rush.site
+	site.fill.Size = UDim2.fromScale(math.clamp(rush.progress / rush.target, 0, 1), 1)
+	local left = math.max(0, rush.endsAt - Events.Now())
+	site.info.Text = string.format("%d/%d dug  -  %s left", rush.progress, rush.target, Format.Duration(left))
+end
+
+-- Ends the rush: loot for every helper if it was dug out, otherwise it sinks
+local function finish(succeeded)
+	local current = rush
+	if not current then
+		return
+	end
+	rush = nil
+	publish()
+
+	-- Nobody can start a new dig here while the site goes away
+	local site = current.site
+	site.mound:SetAttribute("DigSpot", nil)
+	site.mound:SetAttribute("TreasureRush", nil)
+	if succeeded then
+		local helpers = {}
+		for player in pairs(current.helpers) do
+			if player.Parent then
+				table.insert(helpers, player)
+			end
+		end
+		local team = #helpers >= Config.RushTeamSize
+		local minOrder = team and Finds.RarityById.Epic.order or Finds.RarityById.Rare.order
+		notifyAll(string.format("The Treasure Rush is dug out! %d digger%s got %s finds.", #helpers, #helpers == 1 and "" or "s", team and "Epic or better" or "Rare or better"), "rare")
+		for _, player in ipairs(helpers) do
+			task.spawn(giveLoot, player, minOrder)
+		end
+		-- The lid flies open and the chest bursts with sparkles
+		site.title.Text = "DUG OUT!"
+		site.info.Text = string.format("%d digger%s shared the loot", #helpers, #helpers == 1 and "" or "s")
+		site.fill.Size = UDim2.fromScale(1, 1)
+		local lid = site.model:FindFirstChild("ChestLid")
+		if lid then
+			lid.CFrame = lid.CFrame * CFrame.new(0, 1, -1.6) * CFrame.Angles(math.rad(-70), 0, 0)
+		end
+		local burst = site.mound:FindFirstChild("Sparkle")
+		if burst then
+			burst.Rate = 0
+			burst:Emit(120)
+		end
+		task.delay(6, function()
+			site.model:Destroy()
+		end)
+	else
+		notifyAll("The Treasure Rush sank back into the ground. Next time!", "info")
+		site.title.Text = "IT SANK..."
+		site.beam.Transparency = 0.9
+		task.delay(3, function()
+			site.model:Destroy()
+		end)
+	end
+end
+
+function RushService.Begin()
+	if rush then
+		return
+	end
+	local players = #Players:GetPlayers()
+	if players == 0 then
+		return
+	end
+	local at = sitePosition()
+	rush = {
+		site = buildSite(at),
+		progress = 0,
+		target = math.min(Config.RushDigsMax, Config.RushDigs + Config.RushDigsPerPlayer * (players - 1)),
+		helpers = {}, -- [player] = good digs
+		helperCount = 0,
+		endsAt = Events.Now() + Config.RushSeconds,
+	}
+	publish()
+	refreshSign()
+	notifyAll("TREASURE RUSH in Dig Town! Dig it out together for a guaranteed great find.", "rare")
+
+	local mine = rush
+	task.spawn(function()
+		while rush == mine do
+			if Events.Now() >= mine.endsAt then
+				finish(false)
+				break
+			end
+			refreshSign()
+			task.wait(1)
+		end
+	end)
+end
+
+function RushService.IsSite(spot)
+	return rush ~= nil and spot == rush.site.mound
+end
+
+-- A player finished a good dig at the site. Returns the progress and target,
+-- or nil if the rush is already over.
+function RushService.AddDig(player)
+	if not rush then
+		return nil
+	end
+	if not rush.helpers[player] then
+		rush.helpers[player] = 0
+		rush.helperCount += 1
+	end
+	rush.helpers[player] += 1
+	rush.progress += 1
+	local progress, target = rush.progress, rush.target
+	local dirt = rush.site.mound:FindFirstChild("Dirt")
+	if dirt then
+		dirt:Emit(16)
+	end
+	publish()
+	refreshSign()
+	if progress >= target then
+		finish(true)
+	end
+	return progress, target
+end
+
+-- loot(player, minRarityOrder) gives one helper their find
+function RushService.Start(loot)
+	giveLoot = loot
+	publish()
+	task.spawn(function()
+		task.wait(Config.RushFirstSeconds)
+		while true do
+			RushService.Begin()
+			task.wait(Config.RushEverySeconds)
+		end
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		if rush and rush.helpers[player] then
+			rush.helpers[player] = nil
+			rush.helperCount -= 1
+			publish()
+		end
+	end)
+end
+
+return RushService
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">ShopService</string><ProtectedString name="Source"><![CDATA[-- Robux purchases: game passes (VIP, Auto Sell, Big Backpack, Teleporter) and
 -- cosmetic developer products.
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -3414,7 +3985,7 @@ function ShopService.Start()
 end
 
 return ShopService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">TutorialService</string><ProtectedString name="Source"><![CDATA[-- Moves players through Grandpa Gus's first-day guide (see Shared/Tutorial).
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">TutorialService</string><ProtectedString name="Source"><![CDATA[-- Moves players through Grandpa Gus's first-day guide (see Shared/Tutorial).
 -- Other services call TutorialService.Event(player, "Dig") etc.
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -3468,7 +4039,7 @@ function TutorialService.Start()
 end
 
 return TutorialService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">WorldService</string><ProtectedString name="Source"><![CDATA[-- Connects the world to the game: shop and Trading Post prompts, zone gates,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">WorldService</string><ProtectedString name="Source"><![CDATA[-- Connects the world to the game: shop and Trading Post prompts, zone gates,
 -- the global leaderboard board and the weekly event board.
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -3643,7 +4214,7 @@ function WorldService.Start()
 end
 
 return WorldService
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000028"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000027"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000026"><Properties><string name="Name">Client</string><ProtectedString name="Source"><![CDATA[-- Dig Legends player script. Builds the screen and starts digging controls.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX0000002A"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000029"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000028"><Properties><string name="Name">Client</string><ProtectedString name="Source"><![CDATA[-- Dig Legends player script. Builds the screen and starts digging controls.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -3698,7 +4269,7 @@ Digging.Init(diggingGui)
 World.Init()
 Guide.Init(screenGui)
 
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">CameraController</string><ProtectedString name="Source"><![CDATA[-- Over-the-shoulder camera for mouse players: moving the mouse turns the camera
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">CameraController</string><ProtectedString name="Source"><![CDATA[-- Over-the-shoulder camera for mouse players: moving the mouse turns the camera
 -- and your character, like most action games. The mouse is free again whenever
 -- a menu is open, or when you press Alt (press again to lock it).
 -- Phones and tablets keep Roblox's normal touch camera.
@@ -3864,13 +4435,15 @@ function CameraController.Init(screenGui)
 end
 
 return CameraController
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001E"><Properties><string name="Name">Digging</string><ProtectedString name="Source"><![CDATA[-- Digging on the player's screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Digging</string><ProtectedString name="Source"><![CDATA[-- Digging on the player's screen.
 --   1. Take out the shovel and stand next to a sparkling dig spot. The text
 --      under the middle of the screen tells you if you can dig there.
 --   2. Click to dig down. Walking away stops digging.
 --   3. The dig minigame: a marker slides along a bar. Tap while it is in the
 --      green to dig deeper; the gold middle is a perfect hit and makes the find
 --      worth more. Tapping outside the green cracks the find.
+--   A Treasure Rush site is dug the same way, but each good dig fills the
+--   site instead of finding something; the loot comes when it is dug out.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -3995,6 +4568,10 @@ local function hideSpot(spot)
 	end)
 end
 
+local function isRush(spot)
+	return spot ~= nil and spot:GetAttribute("TreasureRush") == true
+end
+
 local function isHidden(spot)
 	local untilTime = hiddenUntil[spot]
 	return untilTime ~= nil and os.clock() < untilTime
@@ -4010,14 +4587,17 @@ local function spotsNear(root)
 	local best, bestDistance = nil, math.huge
 	local any, anyDistance = nil, math.huge
 	for spot in pairs(spots) do
-		if spot.Parent then
+		if not spot.Parent or not spot:GetAttribute("DigSpot") then
+			spots[spot] = nil -- a Treasure Rush site that is over
+		else
+			local rush = isRush(spot)
 			local distance = flatDistance(spot.Position, root.Position)
-			if distance <= Config.DigRange then
+			if distance <= (rush and Config.RushReach or Config.DigRange) then
 				if distance < anyDistance then
 					any, anyDistance = spot, distance
 				end
 				local zoneId = spot:GetAttribute("DigSpot")
-				local unlocked = State.data and State.data.zones[zoneId]
+				local unlocked = rush or (State.data and State.data.zones[zoneId])
 				if unlocked and not isHidden(spot) and distance < bestDistance then
 					best, bestDistance = spot, distance
 				end
@@ -4093,7 +4673,7 @@ local function watchCharacter(character)
 	end)
 	character.ChildRemoved:Connect(function(child)
 		if child:IsA("Tool") and child.Name == SHOVEL_NAME and (phase == "digging" or phase == "minigame") then
-			if phase == "minigame" and digSpot then
+			if phase == "minigame" and digSpot and not isRush(digSpot) then
 				hideSpot(digSpot) -- the server uses up the spot too
 			end
 			Remotes.CancelDig:FireServer()
@@ -4127,7 +4707,8 @@ local function startMinigame(id, params)
 	}, { UI.corner(14) })
 	local outline = UI.stroke(rarity.color, 3)
 	outline.Parent = box
-	UI.label(string.format("??? (%s)", rarity.id), { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 26), TextColor3 = rarity.color, ZIndex = 22, Parent = box })
+	local title = params.rush and "TREASURE RUSH" or string.format("??? (%s)", rarity.id)
+	UI.label(title, { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 26), TextColor3 = params.rush and T.Gold or rarity.color, ZIndex = 22, Parent = box })
 
 	local barBack = UI.new("Frame", {
 		Position = UDim2.fromOffset(20, 44),
@@ -4271,7 +4852,9 @@ local function aimInfo(root)
 		return "Loading...", T.Muted, nil
 	end
 	local spot, any = spotsNear(root)
-	if spot then
+	if spot and isRush(spot) then
+		return "Click to dig the Treasure Rush!", T.Gold, spot
+	elseif spot then
 		return "Click to dig!", T.Good, spot
 	end
 	if any and isHidden(any) then
@@ -4340,14 +4923,16 @@ local function showFind(result)
 		Parent = screenGui,
 	}, { UI.corner(16), UI.stroke(rarity.color, 4), UI.padding(10), UI.list(4) })
 	local top = "Found!"
-	if result.isNew then
+	if result.rushLoot then
+		top = "TREASURE RUSH LOOT!"
+	elseif result.isNew then
 		top = "NEW FIND! Added to your Collection"
 	elseif result.isRecord then
 		top = "NEW PERSONAL RECORD!"
 	end
-	UI.label(top, { Size = UDim2.new(1, 0, 0, 22), TextColor3 = (result.isNew or result.isRecord) and T.Gold or T.Muted, Parent = card })
+	UI.label(top, { Size = UDim2.new(1, 0, 0, 22), TextColor3 = (result.isNew or result.isRecord or result.rushLoot) and T.Gold or T.Muted, Parent = card })
 	UI.label((result.shiny and "Shiny " or "") .. find.name, { Size = UDim2.new(1, 0, 0, 36), TextColor3 = rarity.color, Parent = card })
-	if result.isNew or result.isRecord or rarity.order >= 4 then
+	if result.isNew or result.isRecord or result.rushLoot or rarity.order >= 4 then
 		confetti({ rarity.color, T.Gold, Color3.new(1, 1, 1), T.Accent })
 		play("ping", 1.3)
 	end
@@ -4357,10 +4942,16 @@ local function showFind(result)
 		Parent = card,
 	})
 	local bonus = math.floor((Dig.ValueMultiplier(result.perfects or 0, result.strikes or 1) - 1) * 100 + 0.5)
-	UI.label(string.format("Perfect hits %d/%d  (+%d%% value)", result.perfects or 0, result.strikes or 0, bonus), {
+	local line = string.format("Perfect hits %d/%d  (+%d%% value)", result.perfects or 0, result.strikes or 0, bonus)
+	if result.rushLoot then
+		line = "Thanks for helping dig out the Treasure Rush!"
+	elseif result.buddy then
+		line ..= string.format("  -  Dig buddy +%d%%", math.floor(Config.BuddyBonus * 100 + 0.5))
+	end
+	UI.label(line, {
 		Size = UDim2.new(1, 0, 0, 20),
 		Font = T.BodyFont,
-		TextColor3 = bonus > 0 and T.Gold or T.Muted,
+		TextColor3 = (bonus > 0 or result.buddy or result.rushLoot) and T.Gold or T.Muted,
 		Parent = card,
 	})
 	task.delay(2.5, function()
@@ -4445,15 +5036,26 @@ function Digging.Init(gui)
 	end)
 
 	Remotes.DigResult.OnClientEvent:Connect(function(id, result, reason)
+		if id == "rush" then
+			showFind(result) -- Treasure Rush loot, which can come in the middle of another dig
+			return
+		end
 		if id ~= digId then
 			return
 		end
 		local spot = digSpot
 		reset()
-		if spot and (result or reason ~= "walked") then
+		if spot and not isRush(spot) and (result or reason ~= "walked") then
 			hideSpot(spot)
 		end
-		if result then
+		if result and result.rush then
+			if result.progress then
+				Notifications.Show(string.format("Treasure Rush: %d/%d dug!", result.progress, result.target), "coins")
+				play("ping", 1.1)
+			else
+				Notifications.Show("This Treasure Rush is already over.", "info")
+			end
+		elseif result then
 			showFind(result)
 		else
 			Notifications.Show(MESSAGES[reason] or MESSAGES.cracked, "warning")
@@ -4462,7 +5064,7 @@ function Digging.Init(gui)
 end
 
 return Digging
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[-- Grandpa Gus's first-day guide on screen: the current goal at the top, a golden
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[-- Grandpa Gus's first-day guide on screen: the current goal at the top, a golden
 -- line from you to where you need to go, and Gus talking above his head.
 
 local Players = game:GetService("Players")
@@ -4642,8 +5244,11 @@ function Guide.Init(screenGui)
 end
 
 return Guide
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- Always-on screen info: coins, bag, the weekly event, and the menu buttons.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- Always-on screen info: coins, bag, the weekly event, Treasure Rush and dig
+-- buddy news, and the menu buttons.
 
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -4658,6 +5263,7 @@ local Format = require(Shared.Format)
 local UI = require(script.Parent.UI)
 local State = require(script.Parent.State)
 local Panels = require(script.Parent.Panels)
+local Notifications = require(script.Parent.Notifications)
 local CameraController = require(script.Parent.CameraController)
 local T = UI.Theme
 
@@ -4729,6 +5335,60 @@ function Hud.Init(screenGui)
 		end
 	end)
 
+	-- Treasure Rush and dig buddy news, under the banner. The rush line is a
+	-- button that takes you to Dig Town, where the rush site is.
+	local news = UI.new("Frame", {
+		Name = "News",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 70),
+		Size = UDim2.fromOffset(520, 70),
+		BackgroundTransparency = 1,
+		Parent = screenGui,
+	}, { UI.list(4) })
+	local rushButton = UI.button("", Color3.fromRGB(200, 140, 30), function()
+		local ok, message = State.Action("Teleport", "hub")
+		if not ok and message then
+			Notifications.Show(message, "warning")
+		end
+	end, { Name = "Rush", Size = UDim2.new(1, 0, 0, 34), Visible = false, LayoutOrder = 1, Parent = news })
+	local buddyLine = UI.label("", {
+		Name = "Buddy",
+		Size = UDim2.new(1, 0, 0, 22),
+		TextColor3 = T.Good,
+		TextStrokeTransparency = 0.4,
+		Visible = false,
+		LayoutOrder = 2,
+		Parent = news,
+	})
+	local player = Players.LocalPlayer
+	local function updateBuddy()
+		local buddy = player:GetAttribute("DigBuddy")
+		buddyLine.Visible = buddy ~= nil
+		buddyLine.Text = buddy and string.format("Dig buddy: %s is near, +%d%% coins for you both", buddy, math.floor(Config.BuddyBonus * 100 + 0.5)) or ""
+	end
+	player:GetAttributeChangedSignal("DigBuddy"):Connect(updateBuddy)
+	updateBuddy()
+	task.spawn(function()
+		while true do
+			-- Make room for Grandpa Gus's guide card while it shows
+			local guide = screenGui:FindFirstChild("GuideCard")
+			news.Position = UDim2.new(0.5, 0, 0, guide and guide.Visible and 134 or 70)
+			local active = ReplicatedStorage:GetAttribute("RushActive") == true
+			rushButton.Visible = active
+			if active then
+				local left = math.max(0, (ReplicatedStorage:GetAttribute("RushEndsAt") or 0) - Events.Now())
+				rushButton.Text = string.format(
+					"TREASURE RUSH in Dig Town! %d/%d dug, %s left. %s to go",
+					ReplicatedStorage:GetAttribute("RushProgress") or 0,
+					ReplicatedStorage:GetAttribute("RushTarget") or 0,
+					Format.Duration(left),
+					UserInputService.MouseEnabled and "Click" or "Tap"
+				)
+			end
+			task.wait(0.5)
+		end
+	end)
+
 	-- Menu buttons, left side under the stats, with keyboard shortcuts. On short
 	-- screens (phones) they wrap into a second column, and shrink only if needed.
 	local MENU_TOP, CELL_HEIGHT, GAP = 186, 42, 6
@@ -4791,7 +5451,7 @@ function Hud.Init(screenGui)
 end
 
 return Hud
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Notifications</string><ProtectedString name="Source"><![CDATA[-- Small messages that pop up on the right side of the screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Notifications</string><ProtectedString name="Source"><![CDATA[-- Small messages that pop up on the right side of the screen.
 
 local TweenService = game:GetService("TweenService")
 
@@ -4865,7 +5525,7 @@ function Notifications.Show(text, kind)
 end
 
 return Notifications
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Panels</string><ProtectedString name="Source"><![CDATA[-- The menus: Backpack, Trading Post, Charm Cart, Bounties, Collection, Shovels,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Panels</string><ProtectedString name="Source"><![CDATA[-- The menus: Backpack, Trading Post, Charm Cart, Bounties, Collection, Shovels,
 -- Shop, Travel and Rebirth.
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -5459,7 +6119,7 @@ function Panels.Init(screenGui)
 end
 
 return Panels
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[-- The player's latest save data, as sent by the server.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[-- The player's latest save data, as sent by the server.
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
@@ -5494,7 +6154,7 @@ function State.Action(actionName, argument)
 end
 
 return State
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">UI</string><ProtectedString name="Source"><![CDATA[-- Helpers for building the on-screen menus in code, so nothing has to be
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000026"><Properties><string name="Name">UI</string><ProtectedString name="Source"><![CDATA[-- Helpers for building the on-screen menus in code, so nothing has to be
 -- drawn by hand in Studio. Colors and fonts live in UI.Theme.
 
 local UI = {}
@@ -5677,7 +6337,7 @@ function UI.window(screenGui, title, render)
 end
 
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[-- Things in the world that only this player sees: weather, opened zone gates,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000027"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[-- Things in the world that only this player sees: weather, opened zone gates,
 -- the VIP door, and ambient life (seagulls).
 
 local Lighting = game:GetService("Lighting")

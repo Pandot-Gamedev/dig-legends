@@ -9,6 +9,8 @@ local EconomyService = require(script.EconomyService)
 local CosmeticService = require(script.CosmeticService)
 local DigService = require(script.DigService)
 local WorldService = require(script.WorldService)
+local RushService = require(script.RushService)
+local BuddyService = require(script.BuddyService)
 local Finds = require(game:GetService("ReplicatedStorage").Shared.Finds)
 
 MapBuilder.Build()
@@ -20,6 +22,8 @@ EconomyService.Start()
 CosmeticService.Start()
 DigService.Start()
 WorldService.Start()
+RushService.Start(DigService.GiveRushLoot)
+BuddyService.Start()
 NpcService.Start()
 DataService.Start()
 
@@ -28,10 +32,15 @@ DataService.Start()
 --   game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)
 --   game.ServerStorage.DigLegendsTest:Invoke("xp", 10000)
 --   game.ServerStorage.DigLegendsTest:Invoke("book", "desert") -- fills that Collection page
+--   game.ServerStorage.DigLegendsTest:Invoke("rush") -- starts a Treasure Rush now
 if game:GetService("RunService"):IsStudio() then
 	local test = Instance.new("BindableFunction")
 	test.Name = "DigLegendsTest"
 	test.OnInvoke = function(command, amount)
+		if command == "rush" then
+			RushService.Begin()
+			return "ok"
+		end
 		for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
 			DataService.Update(player, function(data)
 				if command == "coins" then
