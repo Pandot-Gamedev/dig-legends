@@ -9,10 +9,10 @@
 local Shop = {}
 
 Shop.Passes = {
-	{ id = "VIP", gamePassId = 0, name = "VIP", suggestedPrice = 250, description = "Golden VIP name tag, a crown, and access to the VIP lounge." },
-	{ id = "AutoSell", gamePassId = 0, name = "Auto Sell", suggestedPrice = 150, description = "Your backpack sells itself when it fills up, wherever you are." },
-	{ id = "BigBag", gamePassId = 0, name = "Big Backpack", suggestedPrice = 100, description = "Carry 60 finds instead of 20." },
-	{ id = "Teleporter", gamePassId = 0, name = "Zone Teleporter", suggestedPrice = 200, description = "Teleport to any zone you have unlocked." },
+	{ id = "VIP", gamePassId = 2057879657, name = "VIP", suggestedPrice = 250, description = "Golden VIP name tag, a crown, and access to the VIP lounge." },
+	{ id = "AutoSell", gamePassId = 2060422905, name = "Auto Sell", suggestedPrice = 150, description = "Your backpack sells itself when it fills up, wherever you are." },
+	{ id = "BigBag", gamePassId = 2058845634, name = "Big Backpack", suggestedPrice = 100, description = "Carry 60 finds instead of 20." },
+	{ id = "Teleporter", gamePassId = 2058899650, name = "Zone Teleporter", suggestedPrice = 200, description = "Teleport to any zone you have unlocked." },
 }
 
 -- kind: "shovelSkin" changes how your shovel looks, "trail" adds a trail behind you,
