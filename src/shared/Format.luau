@@ -41,6 +41,9 @@ end
 function Format.Weight(kg)
 	if kg >= 100 then
 		return string.format("%d kg", math.floor(kg))
+	elseif kg < 0.1 then
+		-- Small finds like coins and bottle caps weigh a few grams
+		return string.format("%d g", math.max(1, math.floor(kg * 1000 + 0.5)))
 	end
 	return string.format("%.1f kg", kg)
 end
