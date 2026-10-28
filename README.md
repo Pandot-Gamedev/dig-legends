@@ -7,9 +7,9 @@ The ready-to-open game file is [build/DigLegends.rbxlx](build/DigLegends.rbxlx).
 
 ## Status
 
-Step 3 of 6: all five zones are in. Step 2 (digging in the **Backyard** and the starter patch) was
-play-tested in Roblox Studio on 2026-10-27 with no script errors. **Step 3 is not play-tested in
-Studio yet**: the walk through Desert Dig, Crystal Caves, Sunken Ruins and Volcano Core is next.
+Step 3 of 6: all five zones are in. Steps 2 and 3 were play-tested in Roblox Studio on
+2026-10-27/28 with no script errors: level and coin unlocks (in order), digging in every zone,
+Collection pages, Master titles and the +5% page bonus.
 Still to come: Treasure Rush and dig buddies (step 4) and the shop setup (step 5).
 All shop ids are 0, so passes and cosmetics show "Coming soon".
 
@@ -30,10 +30,11 @@ Test helper (Studio only, never in the live game): to get coins for testing the 
 **Server** view while playing and run this in the command bar:
 `game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)`
 To reach a zone's level, add digger XP the same way: `game.ServerStorage.DigLegendsTest:Invoke("xp", 10000)`
+To fill a zone's Collection page: `game.ServerStorage.DigLegendsTest:Invoke("book", "desert")`
 
 ## What's in the game so far
 
-- **5 zones**, each opened with a digger level and coins: Backyard, Desert Dig (Lv 5), Crystal Caves (Lv 12),
+- **5 zones**, opened in order with a digger level and coins: Backyard, Desert Dig (Lv 5), Crystal Caves (Lv 12),
   Sunken Ruins (Lv 20) and Volcano Core (Lv 30). Each island has its own look: pyramid and cacti,
   glowing crystals, marble columns, lava pools and a smoking volcano.
 - **60 finds (12 per zone) + 5 weekly legendary finds**, 5 rarities, random weights, rare **Shiny** finds worth 3x.

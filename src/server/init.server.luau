@@ -9,6 +9,7 @@ local EconomyService = require(script.EconomyService)
 local CosmeticService = require(script.CosmeticService)
 local DigService = require(script.DigService)
 local WorldService = require(script.WorldService)
+local Finds = require(game:GetService("ReplicatedStorage").Shared.Finds)
 
 MapBuilder.Build()
 
@@ -26,6 +27,7 @@ DataService.Start()
 -- bar, with the Server view selected:
 --   game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)
 --   game.ServerStorage.DigLegendsTest:Invoke("xp", 10000)
+--   game.ServerStorage.DigLegendsTest:Invoke("book", "desert") -- fills that Collection page
 if game:GetService("RunService"):IsStudio() then
 	local test = Instance.new("BindableFunction")
 	test.Name = "DigLegendsTest"
@@ -36,6 +38,10 @@ if game:GetService("RunService"):IsStudio() then
 					data.coins += amount
 				elseif command == "xp" then
 					data.xp += amount
+				elseif command == "book" then
+					for _, find in ipairs(Finds.ByZone[amount] or {}) do
+						data.book[find.id] = data.book[find.id] or { count = 1, best = 0.1, shiny = 0 }
+					end
 				end
 			end)
 		end

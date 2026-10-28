@@ -302,6 +302,10 @@ function EconomyService.UnlockZone(player, zoneId)
 	if data.zones[zone.id] then
 		return true
 	end
+	local previous = Zones.Previous(zone.id)
+	if previous and not data.zones[previous.id] then
+		return false, string.format("Unlock %s first", previous.name)
+	end
 	if Level.FromXp(data.xp) < zone.level then
 		return false, string.format("Reach digger level %d to unlock %s", zone.level, zone.name)
 	end

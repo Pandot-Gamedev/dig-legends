@@ -517,7 +517,10 @@ local function renderTeleport(body)
 		local card = row(body, 56, index + 1)
 		UI.label(zone.name, { Position = UDim2.fromOffset(12, 14), Size = UDim2.new(0.6, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = zone.color, Parent = card })
 		local props = { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(150, 38), Parent = card }
-		if not data.zones[zone.id] and Level.FromXp(data.xp) < zone.level then
+		local previous = Zones.Previous(zone.id)
+		if not data.zones[zone.id] and previous and not data.zones[previous.id] then
+			UI.button("Unlock " .. previous.short .. " first", T.Card, nil, props)
+		elseif not data.zones[zone.id] and Level.FromXp(data.xp) < zone.level then
 			UI.button("Needs Lv " .. zone.level, T.Card, nil, props)
 		elseif not data.zones[zone.id] then
 			UI.button("Unlock " .. Format.Number(zone.price), data.coins >= zone.price and T.Good or T.Bad, function()
@@ -556,7 +559,8 @@ local function renderRebirth(body)
 		"You reset: coins, shovels, unlocked zones and the rest of your backpack.",
 	}
 	if requiredZone then
-		table.insert(lines, "Requires: " .. requiredZone.name .. " unlocked.")
+		local done = data.zones[requiredZone.id] and "  (done)" or "  (not yet)"
+		table.insert(lines, "Requires: " .. requiredZone.name .. " unlocked." .. done)
 	end
 	for index, text in ipairs(lines) do
 		UI.label(text, { Size = UDim2.new(1, -8, 0, 26), TextWrapped = true, Font = index <= 3 and T.Font or T.BodyFont, TextColor3 = index <= 3 and T.Text or T.Muted, LayoutOrder = index, Parent = body })

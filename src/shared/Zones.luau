@@ -19,4 +19,10 @@ end
 
 Zones.Default = "backyard"
 
+-- The zone you must unlock first (zones open in order, like the bridges)
+function Zones.Previous(zoneId)
+	local zone = Zones.ById[zoneId]
+	return zone and Zones.List[zone.order - 1]
+end
+
 return Zones

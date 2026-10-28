@@ -944,6 +944,12 @@ end
 
 Zones.Default = "backyard"
 
+-- The zone you must unlock first (zones open in order, like the bridges)
+function Zones.Previous(zoneId)
+	local zone = Zones.ById[zoneId]
+	return zone and Zones.List[zone.order - 1]
+end
+
 return Zones
 ]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX0000001C"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000001B"><Properties><string name="Name">Server</string><ProtectedString name="Source"><![CDATA[-- Dig Legends server. Starts every service in order.
 
@@ -956,6 +962,7 @@ local EconomyService = require(script.EconomyService)
 local CosmeticService = require(script.CosmeticService)
 local DigService = require(script.DigService)
 local WorldService = require(script.WorldService)
+local Finds = require(game:GetService("ReplicatedStorage").Shared.Finds)
 
 MapBuilder.Build()
 
@@ -973,6 +980,7 @@ DataService.Start()
 -- bar, with the Server view selected:
 --   game.ServerStorage.DigLegendsTest:Invoke("coins", 5000)
 --   game.ServerStorage.DigLegendsTest:Invoke("xp", 10000)
+--   game.ServerStorage.DigLegendsTest:Invoke("book", "desert") -- fills that Collection page
 if game:GetService("RunService"):IsStudio() then
 	local test = Instance.new("BindableFunction")
 	test.Name = "DigLegendsTest"
@@ -983,6 +991,10 @@ if game:GetService("RunService"):IsStudio() then
 					data.coins += amount
 				elseif command == "xp" then
 					data.xp += amount
+				elseif command == "book" then
+					for _, find in ipairs(Finds.ByZone[amount] or {}) do
+						data.book[find.id] = data.book[find.id] or { count = 1, best = 0.1, shiny = 0 }
+					end
 				end
 			end)
 		end
@@ -2354,6 +2366,10 @@ function EconomyService.UnlockZone(player, zoneId)
 	end
 	if data.zones[zone.id] then
 		return true
+	end
+	local previous = Zones.Previous(zone.id)
+	if previous and not data.zones[previous.id] then
+		return false, string.format("Unlock %s first", previous.name)
 	end
 	if Level.FromXp(data.xp) < zone.level then
 		return false, string.format("Reach digger level %d to unlock %s", zone.level, zone.name)
@@ -4713,15 +4729,33 @@ function Hud.Init(screenGui)
 		end
 	end)
 
-	-- Menu buttons, left side, with keyboard shortcuts
+	-- Menu buttons, left side under the stats, with keyboard shortcuts. On short
+	-- screens (phones) they wrap into a second column, and shrink only if needed.
+	local MENU_TOP, CELL_HEIGHT, GAP = 186, 42, 6
 	local menu = UI.new("Frame", {
 		Name = "Menu",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 16, 0.5, 30),
-		Size = UDim2.fromOffset(130, 420),
+		Position = UDim2.fromOffset(16, MENU_TOP),
+		Size = UDim2.fromOffset(130 * 2 + GAP, 8 * (CELL_HEIGHT + GAP)),
 		BackgroundTransparency = 1,
 		Parent = screenGui,
-	}, { UI.list(6) })
+	})
+	local grid = Instance.new("UIGridLayout")
+	grid.CellSize = UDim2.fromOffset(130, CELL_HEIGHT)
+	grid.CellPadding = UDim2.fromOffset(GAP, GAP)
+	grid.FillDirection = Enum.FillDirection.Vertical
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.Parent = menu
+	local menuScale = Instance.new("UIScale")
+	menuScale.Parent = menu
+	local function fitMenu()
+		local room = screenGui.AbsoluteSize.Y - MENU_TOP - 16
+		local rows = math.clamp(math.floor((room + GAP) / (CELL_HEIGHT + GAP)), 4, 8)
+		grid.FillDirectionMaxCells = rows
+		menuScale.Scale = math.clamp(room / (rows * (CELL_HEIGHT + GAP) - GAP), 0.6, 1)
+	end
+	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitMenu)
+	fitMenu()
+
 	local buttons = {
 		{ "Backpack", "Bag", Color3.fromRGB(90, 140, 220), Enum.KeyCode.Q },
 		{ "Collection", "Book", Color3.fromRGB(80, 160, 255), Enum.KeyCode.B },
@@ -5350,7 +5384,10 @@ local function renderTeleport(body)
 		local card = row(body, 56, index + 1)
 		UI.label(zone.name, { Position = UDim2.fromOffset(12, 14), Size = UDim2.new(0.6, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = zone.color, Parent = card })
 		local props = { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), Size = UDim2.fromOffset(150, 38), Parent = card }
-		if not data.zones[zone.id] and Level.FromXp(data.xp) < zone.level then
+		local previous = Zones.Previous(zone.id)
+		if not data.zones[zone.id] and previous and not data.zones[previous.id] then
+			UI.button("Unlock " .. previous.short .. " first", T.Card, nil, props)
+		elseif not data.zones[zone.id] and Level.FromXp(data.xp) < zone.level then
 			UI.button("Needs Lv " .. zone.level, T.Card, nil, props)
 		elseif not data.zones[zone.id] then
 			UI.button("Unlock " .. Format.Number(zone.price), data.coins >= zone.price and T.Good or T.Bad, function()
@@ -5389,7 +5426,8 @@ local function renderRebirth(body)
 		"You reset: coins, shovels, unlocked zones and the rest of your backpack.",
 	}
 	if requiredZone then
-		table.insert(lines, "Requires: " .. requiredZone.name .. " unlocked.")
+		local done = data.zones[requiredZone.id] and "  (done)" or "  (not yet)"
+		table.insert(lines, "Requires: " .. requiredZone.name .. " unlocked." .. done)
 	end
 	for index, text in ipairs(lines) do
 		UI.label(text, { Size = UDim2.new(1, -8, 0, 26), TextWrapped = true, Font = index <= 3 and T.Font or T.BodyFont, TextColor3 = index <= 3 and T.Text or T.Muted, LayoutOrder = index, Parent = body })

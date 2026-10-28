@@ -85,15 +85,33 @@ function Hud.Init(screenGui)
 		end
 	end)
 
-	-- Menu buttons, left side, with keyboard shortcuts
+	-- Menu buttons, left side under the stats, with keyboard shortcuts. On short
+	-- screens (phones) they wrap into a second column, and shrink only if needed.
+	local MENU_TOP, CELL_HEIGHT, GAP = 186, 42, 6
 	local menu = UI.new("Frame", {
 		Name = "Menu",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 16, 0.5, 30),
-		Size = UDim2.fromOffset(130, 420),
+		Position = UDim2.fromOffset(16, MENU_TOP),
+		Size = UDim2.fromOffset(130 * 2 + GAP, 8 * (CELL_HEIGHT + GAP)),
 		BackgroundTransparency = 1,
 		Parent = screenGui,
-	}, { UI.list(6) })
+	})
+	local grid = Instance.new("UIGridLayout")
+	grid.CellSize = UDim2.fromOffset(130, CELL_HEIGHT)
+	grid.CellPadding = UDim2.fromOffset(GAP, GAP)
+	grid.FillDirection = Enum.FillDirection.Vertical
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.Parent = menu
+	local menuScale = Instance.new("UIScale")
+	menuScale.Parent = menu
+	local function fitMenu()
+		local room = screenGui.AbsoluteSize.Y - MENU_TOP - 16
+		local rows = math.clamp(math.floor((room + GAP) / (CELL_HEIGHT + GAP)), 4, 8)
+		grid.FillDirectionMaxCells = rows
+		menuScale.Scale = math.clamp(room / (rows * (CELL_HEIGHT + GAP) - GAP), 0.6, 1)
+	end
+	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitMenu)
+	fitMenu()
+
 	local buttons = {
 		{ "Backpack", "Bag", Color3.fromRGB(90, 140, 220), Enum.KeyCode.Q },
 		{ "Collection", "Book", Color3.fromRGB(80, 160, 255), Enum.KeyCode.B },
