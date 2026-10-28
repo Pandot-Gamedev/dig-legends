@@ -7,11 +7,11 @@ The ready-to-open game file is [build/DigLegends.rbxlx](build/DigLegends.rbxlx).
 
 ## Status
 
-Step 4 of 6: multiplayer is in (Treasure Rush, dig buddies, server announcements), and the store
-art for step 5 is drawn. Steps 2 and 3 were play-tested in Roblox Studio on 2026-10-27/28 with no
-script errors: level and coin unlocks (in order), digging in every zone, Collection pages, Master
-titles and the +5% page bonus.
-Still to come: the pass and product ids (step 5), then launch (step 6).
+Published privately on Roblox on 2026-10-28:
+[Dig Legends](https://www.roblox.com/games/83829887315860/Dig-Legends) (experience 10773541582).
+Steps 1 to 4 are done and play-tested in Roblox Studio with no script errors, including Treasure
+Rush and dig buddies with 2 test players. The store art for step 5 is in `store/`.
+Still to come: the pass and product ids (step 5), then going public (step 6).
 All shop ids are 0, so passes and cosmetics show "Coming soon".
 
 ## How to test in Roblox Studio
