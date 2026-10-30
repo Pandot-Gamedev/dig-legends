@@ -1,4 +1,6 @@
-# Dig Legends
+# Dig Up a Legendary!
+
+Called Dig Legends until 2026-10-30, when it was renamed to stand out in Roblox search (no other game uses the new name). The repo, file and code names keep the old name.
 
 A relaxed Roblox treasure-digging collection game: dig up fossils, gems and relics, sell them,
 buy better shovels, unlock new zones and fill your Collection. Built on the Reel Legends code base.

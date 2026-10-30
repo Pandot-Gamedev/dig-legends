@@ -2,7 +2,7 @@
 
 local Config = {}
 
-Config.GameName = "Dig Legends"
+Config.GameName = "Dig Up a Legendary!"
 
 -- Saving
 Config.DataStoreName = "PlayerData_v1"

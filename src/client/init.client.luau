@@ -1,4 +1,4 @@
--- Dig Legends player script. Builds the screen and starts digging controls.
+-- Dig Up a Legendary! player script. Builds the screen and starts digging controls.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")

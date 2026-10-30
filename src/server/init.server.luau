@@ -1,4 +1,4 @@
--- Dig Legends server. Starts every service in order.
+-- Dig Up a Legendary! server. Starts every service in order.
 
 local MapBuilder = require(script.MapBuilder)
 local DataService = require(script.DataService)
@@ -59,4 +59,4 @@ if game:GetService("RunService"):IsStudio() then
 	test.Parent = game:GetService("ServerStorage")
 end
 
-print("[Dig Legends] Server ready")
+print("[Dig Up a Legendary!] Server ready")
