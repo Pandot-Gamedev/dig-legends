@@ -11,6 +11,7 @@ local Hud = require(script.Hud)
 local Digging = require(script.Digging)
 local World = require(script.World)
 local Guide = require(script.Guide)
+local Community = require(script.Community)
 
 local player = Players.LocalPlayer
 
@@ -48,6 +49,12 @@ local diggingGui = UI.new("ScreenGui", {
 Notifications.Init(screenGui)
 CameraController.Init(diggingGui)
 Panels.Init(screenGui)
+Community.Init(screenGui, {
+	gameId = "dig",
+	rewardText = "the Crew Shovel Skin and the Pandot Crew title",
+	key = Enum.KeyCode.G,
+})
+Panels.Community = Community.window
 Hud.Init(screenGui)
 Digging.Init(diggingGui)
 World.Init()

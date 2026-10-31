@@ -11,6 +11,7 @@ local DigService = require(script.DigService)
 local WorldService = require(script.WorldService)
 local RushService = require(script.RushService)
 local BuddyService = require(script.BuddyService)
+local CommunityService = require(script.CommunityService)
 local Finds = require(game:GetService("ReplicatedStorage").Shared.Finds)
 
 MapBuilder.Build()
@@ -25,6 +26,12 @@ WorldService.Start()
 RushService.Start(DigService.GiveRushLoot)
 BuddyService.Start()
 NpcService.Start()
+CommunityService.Start({
+	gameId = "dig",
+	rewards = { "community_shovel", "community_title" },
+	equip = { shovelSkin = "community_shovel", title = "community_title" },
+	rewardText = "Crew Shovel Skin and Pandot Crew title",
+})
 DataService.Start()
 
 -- Test helpers for Roblox Studio only (never in the live game). In the command

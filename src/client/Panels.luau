@@ -446,6 +446,14 @@ local function renderShop(body)
 			button.Activated:Connect(function()
 				act("EquipCosmetic", item.id)
 			end)
+		elseif item.community then
+			button.Text = "Free Gift"
+			button.BackgroundColor3 = T.Gold
+			button.Activated:Connect(function()
+				if Panels.Community then
+					Panels.Community.open()
+				end
+			end)
 		elseif item.earned then
 			button.Text = "Not earned"
 			button.BackgroundColor3 = T.Card
@@ -480,7 +488,7 @@ local function renderShop(body)
 			cosmeticRow(item)
 		end
 	end
-	heading(body, "Earned titles (free, unlocked by playing)", nextOrder())
+	heading(body, "Free extras (earned by playing, or from the Free Gift)", nextOrder())
 	for _, item in ipairs(Shop.EarnedTitles) do
 		cosmeticRow(item)
 	end

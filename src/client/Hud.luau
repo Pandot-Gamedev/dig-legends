@@ -178,6 +178,7 @@ function Hud.Init(screenGui)
 		{ "Shop", "Shop", Color3.fromRGB(70, 200, 110), Enum.KeyCode.P },
 		{ "Travel", "Teleport", Color3.fromRGB(170, 100, 255), Enum.KeyCode.T },
 		{ "Rebirth", "Rebirth", Color3.fromRGB(255, 90, 160), nil },
+		{ "Free Gift", "Community", Color3.fromRGB(255, 170, 30), Enum.KeyCode.G },
 	}
 	local shortcuts = {}
 	for index, info in ipairs(buttons) do
