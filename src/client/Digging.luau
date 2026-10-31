@@ -47,6 +47,7 @@ local aimLabel
 local highlight
 
 local phase = "idle" -- idle, starting, digging, minigame, done
+local findCardUntil = 0 -- no new dig until the "Found!" card is gone (os.clock time)
 local digId = nil
 local digSpot = nil
 local token = 0
@@ -214,7 +215,7 @@ end
 
 -- Click / tap with the shovel out
 local function onActivated()
-	if phase == "idle" then
+	if phase == "idle" and not UI.IsWindowOpen() and os.clock() >= findCardUntil then
 		startDig()
 	end
 end
@@ -393,12 +394,17 @@ local function startMinigame(id, params)
 			or input.KeyCode == Enum.KeyCode.ButtonA
 	end
 	table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
-		if isTapInput(input) and not (processed and input.UserInputType == Enum.UserInputType.Touch) then
+		if isTapInput(input) and not (processed and input.UserInputType == Enum.UserInputType.Touch) and not UI.IsWindowOpen() then
 			tap()
 		end
 	end))
 
 	table.insert(connections, RunService.RenderStepped:Connect(function(dt)
+		-- A menu window pauses the minigame and hides it until the window closes
+		box.Visible = not UI.IsWindowOpen()
+		if not box.Visible then
+			return
+		end
 		elapsed += math.min(dt, 0.1)
 		marker.Position = UDim2.fromScale(Dig.MarkerAt(elapsed, params.speed), 0.5)
 		if elapsed > Dig.MaxSeconds then
@@ -433,7 +439,7 @@ local function updateAim()
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local holding = character and character:FindFirstChild(SHOVEL_NAME)
-	if phase ~= "idle" or not holding or not root or UI.IsWindowOpen() then
+	if phase ~= "idle" or not holding or not root or UI.IsWindowOpen() or os.clock() < findCardUntil then
 		aimLabel.Visible = false
 		highlight.Adornee = nil
 		CameraController.SetCrosshairColor(nil)
@@ -517,6 +523,7 @@ local function showFind(result)
 		TextColor3 = (bonus > 0 or result.buddy or result.rushLoot) and T.Gold or T.Muted,
 		Parent = card,
 	})
+	findCardUntil = os.clock() + 2.8
 	task.delay(2.5, function()
 		local tween = TweenService:Create(card, TweenInfo.new(0.3), { BackgroundTransparency = 1 })
 		tween:Play()

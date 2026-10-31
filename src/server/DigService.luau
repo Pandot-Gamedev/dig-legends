@@ -18,6 +18,7 @@ local Events = require(Shared.Events)
 local Charms = require(Shared.Charms)
 local Dig = require(Shared.Dig)
 local FindModel = require(Shared.FindModel)
+local ShovelModel = require(Shared.ShovelModel)
 local Level = require(Shared.Level)
 local Format = require(Shared.Format)
 local Remotes = require(Shared.Remotes)
@@ -37,7 +38,7 @@ local WANDER_LIMIT = 6 -- studs a player may drift from where they started diggi
 local SHOVEL_LENGTH = 5
 -- How far the shovel leans while held. If it points the wrong way in Studio,
 -- flip the sign (e.g. to 35).
-local SHOVEL_TILT = -35
+local SHOVEL_TILT = -55
 
 local random = Random.new()
 local digs = {} -- [player] = current dig
@@ -512,33 +513,12 @@ local function buildShovel(player)
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
 
-	local handle = Instance.new("Part")
-	handle.Name = "Handle"
-	handle.Size = Vector3.new(0.3, SHOVEL_LENGTH, 0.3)
-	handle.CanCollide = false
-	handle.Massless = true
-	handle.Color = Color3.fromRGB(130, 90, 55)
-	handle.Material = Enum.Material.Wood
-	handle.Parent = tool
-
-	local blade = Instance.new("Part")
-	blade.Name = "Blade"
-	blade.Size = Vector3.new(1.3, 1.5, 0.2)
-	blade.CanCollide = false
-	blade.Massless = true
-	blade.Color = shovel.color
-	blade.Material = Enum.Material.Metal
-	blade.CFrame = handle.CFrame * CFrame.new(0, -SHOVEL_LENGTH / 2 - 0.6, 0)
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = handle
-	weld.Part1 = blade
-	weld.Parent = blade
-	blade.Parent = tool
+	ShovelModel.Build(tool, shovel, SHOVEL_LENGTH)
 
 	-- Hold the shovel near its top end, blade down
 	tool.Grip = gripFor(0)
 
-	CosmeticService.StyleShovel(player, blade)
+	CosmeticService.StyleShovel(player, tool)
 	return tool
 end
 
