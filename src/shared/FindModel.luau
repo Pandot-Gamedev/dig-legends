@@ -2,6 +2,7 @@
 -- dug up.
 
 local Finds = require(script.Parent.Finds)
+local CrownModel = require(script.Parent.CrownModel)
 
 local FindModel = {}
 
@@ -67,6 +68,10 @@ function BUILDERS.ring(model, s, color, material)
 	local body = piece(model, "Body", Vector3.new(s * 0.12, s * 0.7, s * 0.7), color, material, Enum.PartType.Cylinder)
 	extra(model, body, "Gem", Vector3.one * s * 0.25, CFrame.new(0, s * 0.38, 0), Color3.fromRGB(120, 200, 255), Enum.Material.Neon, Enum.PartType.Ball)
 	return body
+end
+
+function BUILDERS.crown(model, s, color, material)
+	return CrownModel.AddTo(model, s * 0.42, { color = color, material = material == Enum.Material.Neon and material or Enum.Material.Metal, coreName = "Body" })
 end
 
 function BUILDERS.orb(model, s, color, material)

@@ -1,4 +1,4 @@
-<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4"><Item class="ReplicatedStorage" referent="RBX00000011"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000010"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Bounties</string><ProtectedString name="Source"><![CDATA[-- Grandpa Gus's daily bounties: three find requests per player per day.
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4"><Item class="ReplicatedStorage" referent="RBX00000014"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000013"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX00000001"><Properties><string name="Name">Bounties</string><ProtectedString name="Source"><![CDATA[-- Grandpa Gus's daily bounties: three find requests per player per day.
 -- Turning one in pays three times what the Trading Post would, plus charms.
 
 local Finds = require(script.Parent.Finds)
@@ -138,7 +138,7 @@ return Charms
 
 local Config = {}
 
-Config.GameName = "Dig Legends"
+Config.GameName = "Dig Up a Legendary!"
 
 -- Saving
 Config.DataStoreName = "PlayerData_v1"
@@ -208,7 +208,147 @@ function Config.SellMultiplier(rebirths, pages)
 end
 
 return Config
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">Dig</string><ProtectedString name="Source"><![CDATA[-- The dig minigame, shared by server and player so both agree on the rules.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000004"><Properties><string name="Name">CrownModel</string><ProtectedString name="Source"><![CDATA[-- Builds a real-looking crown out of parts: a gold band with a rim, tall and
+-- short points with pearls, gems on the front, a red velvet cap and a little
+-- cross on top. Used for the VIP crown and the Sunken King's Crown find.
+--
+-- CrownModel.AddTo(model, radius, options) adds the crown parts to a model and
+-- returns the invisible center part ("Core" unless options.coreName says
+-- otherwise). Every other part is welded to that center, so moving or welding
+-- the center moves the whole crown. The crown stands upright along the
+-- center's +Y, with the band centered on it.
+
+local CrownModel = {}
+
+local SEGMENTS = 8 -- sides of the band (each one gets a point)
+local BASE_RADIUS = 0.55 -- the sizes below are for this radius and scale with it
+
+local GEM_COLORS = {
+	Color3.fromRGB(220, 30, 60), -- ruby
+	Color3.fromRGB(40, 110, 255), -- sapphire
+	Color3.fromRGB(30, 200, 110), -- emerald
+	Color3.fromRGB(170, 60, 255), -- amethyst
+}
+
+local function newPart(className, model, name, size, color, material)
+	local p = Instance.new(className)
+	p.Name = name
+	p.Size = size
+	p.Color = color
+	p.Material = material
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+	p.Anchored = false
+	p.CastShadow = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = model
+	return p
+end
+
+local function attach(core, p, offset)
+	p.CFrame = core.CFrame * offset
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = core
+	weld.Part1 = p
+	weld.Parent = p
+	return p
+end
+
+-- A flat triangle (two wedges) standing on its base. `at` is the middle of the
+-- base, the triangle rises along at's +Y and its flat faces look along at's Z.
+function CrownModel.Triangle(model, core, name, baseWidth, height, thickness, at, color, material)
+	-- A WedgePart turned a quarter turn about Y is a right triangle in X/Y with
+	-- its upright side on +X (or -X when turned the other way).
+	local halves = {
+		{ x = -baseWidth / 4, turn = CFrame.Angles(0, math.rad(90), 0) },
+		{ x = baseWidth / 4, turn = CFrame.Angles(0, math.rad(-90), 0) },
+	}
+	local wedges = {}
+	for _, half in ipairs(halves) do
+		local wedge = newPart("WedgePart", model, name, Vector3.new(thickness, height, baseWidth / 2), color, material)
+		attach(core, wedge, at * CFrame.new(half.x, height / 2, 0) * half.turn)
+		table.insert(wedges, wedge)
+	end
+	return wedges
+end
+
+local function defaults(options)
+	options = options or {}
+	return {
+		gold = options.color or Color3.fromRGB(255, 196, 45),
+		material = options.material or Enum.Material.Metal,
+		coreName = options.coreName or "Core",
+		velvet = options.velvet ~= false,
+	}
+end
+
+function CrownModel.AddTo(model, radius, options)
+	local o = defaults(options)
+	local k = radius / BASE_RADIUS
+	local gold = o.gold
+	local darkGold = gold:Lerp(Color3.new(0, 0, 0), 0.25)
+
+	local core = newPart("Part", model, o.coreName, Vector3.one * 0.2 * k, gold, o.material)
+	core.Transparency = 1
+
+	local bandHeight = 0.42 * k
+	local thickness = 0.1 * k
+	local side = 2 * radius * math.tan(math.pi / SEGMENTS) -- width of one side of the band
+
+	for i = 0, SEGMENTS - 1 do
+		local around = CFrame.Angles(0, i * 2 * math.pi / SEGMENTS, 0)
+		local tall = i % 2 == 0
+
+		-- Band side and the thicker rim along its bottom edge
+		attach(core, newPart("Part", model, "Band", Vector3.new(side * 1.04, bandHeight, thickness), gold, o.material), around * CFrame.new(0, 0, -radius))
+		attach(
+			core,
+			newPart("Part", model, "Rim", Vector3.new(side * 1.12, bandHeight * 0.28, thickness * 1.8), darkGold, o.material),
+			around * CFrame.new(0, -bandHeight * 0.42, -radius)
+		)
+
+		-- A point on top of every side: tall ones with a pearl, short ones with a bead
+		local pointHeight = (tall and 0.62 or 0.32) * k
+		local top = around * CFrame.new(0, bandHeight / 2, -radius)
+		CrownModel.Triangle(model, core, "Point", side * 0.98, pointHeight, thickness * 0.9, top, gold, o.material)
+		local pearlSize = (tall and 0.17 or 0.11) * k
+		attach(
+			core,
+			newPart("Part", model, tall and "Pearl" or "Bead", Vector3.one * pearlSize, tall and Color3.fromRGB(250, 245, 235) or gold, tall and Enum.Material.SmoothPlastic or o.material),
+			top * CFrame.new(0, pointHeight + pearlSize * 0.25, 0)
+		).Shape = Enum.PartType.Ball
+
+		-- A gem on the band below each tall point
+		if tall then
+			local gem = newPart("Part", model, "Gem", Vector3.new(0.17, 0.17, 0.08) * k, GEM_COLORS[(i / 2) % #GEM_COLORS + 1], Enum.Material.Neon)
+			attach(core, gem, around * CFrame.new(0, bandHeight * 0.05, -radius - thickness * 0.55) * CFrame.Angles(0, 0, math.rad(45)))
+		end
+	end
+
+	if o.velvet then
+		-- Red velvet cap filling the band, with a gold orb and cross on top
+		local capHeight = bandHeight * 1.9
+		local cap = newPart("Part", model, "Velvet", Vector3.new(radius * 1.9, capHeight, radius * 1.9), Color3.fromRGB(150, 20, 45), Enum.Material.Fabric)
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = cap
+		attach(core, cap, CFrame.new(0, bandHeight * 0.05, 0))
+		local orbY = bandHeight * 0.05 + capHeight / 2 + 0.06 * k
+		local orb = newPart("Part", model, "Orb", Vector3.one * 0.18 * k, gold, o.material)
+		orb.Shape = Enum.PartType.Ball
+		attach(core, orb, CFrame.new(0, orbY, 0))
+		attach(core, newPart("Part", model, "Cross", Vector3.new(0.06, 0.26, 0.06) * k, gold, o.material), CFrame.new(0, orbY + 0.2 * k, 0))
+		attach(core, newPart("Part", model, "Cross", Vector3.new(0.18, 0.06, 0.06) * k, gold, o.material), CFrame.new(0, orbY + 0.24 * k, 0))
+	end
+
+	return core
+end
+
+return CrownModel
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">Dig</string><ProtectedString name="Source"><![CDATA[-- The dig minigame, shared by server and player so both agree on the rules.
 --
 -- A marker slides back and forth along a bar. Tap while it is inside the green
 -- sweet spot to dig deeper; the gold middle is a "perfect" hit. After every hit
@@ -272,7 +412,7 @@ function Dig.ValueMultiplier(perfects, strikes)
 end
 
 return Dig
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000005"><Properties><string name="Name">Events</string><ProtectedString name="Source"><![CDATA[-- Weekly legendary finds and rotating weather. Both are worked out from the
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">Events</string><ProtectedString name="Source"><![CDATA[-- Weekly legendary finds and rotating weather. Both are worked out from the
 -- clock, so every server (and every player's screen) agrees without talking.
 
 local Workspace = game:GetService("Workspace")
@@ -326,10 +466,11 @@ function Events.GetWeather(now)
 end
 
 return Events
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000006"><Properties><string name="Name">FindModel</string><ProtectedString name="Source"><![CDATA[-- Builds a simple 3D find out of parts. Used when a player holds up what they
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">FindModel</string><ProtectedString name="Source"><![CDATA[-- Builds a simple 3D find out of parts. Used when a player holds up what they
 -- dug up.
 
 local Finds = require(script.Parent.Finds)
+local CrownModel = require(script.Parent.CrownModel)
 
 local FindModel = {}
 
@@ -395,6 +536,10 @@ function BUILDERS.ring(model, s, color, material)
 	local body = piece(model, "Body", Vector3.new(s * 0.12, s * 0.7, s * 0.7), color, material, Enum.PartType.Cylinder)
 	extra(model, body, "Gem", Vector3.one * s * 0.25, CFrame.new(0, s * 0.38, 0), Color3.fromRGB(120, 200, 255), Enum.Material.Neon, Enum.PartType.Ball)
 	return body
+end
+
+function BUILDERS.crown(model, s, color, material)
+	return CrownModel.AddTo(model, s * 0.42, { color = color, material = material == Enum.Material.Neon and material or Enum.Material.Metal, coreName = "Body" })
 end
 
 function BUILDERS.orb(model, s, color, material)
@@ -487,7 +632,7 @@ function FindModel.Build(findId, weight, shiny)
 end
 
 return FindModel
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">Finds</string><ProtectedString name="Source"><![CDATA[-- Everything you can dig up. To add a find, copy a line and give it a new unique id.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">Finds</string><ProtectedString name="Source"><![CDATA[-- Everything you can dig up. To add a find, copy a line and give it a new unique id.
 -- value = coins for an average-weight find. weight = {min, max} in kg.
 -- shape = how it looks when held up (see FindModel): coin, gem, bone, egg, relic, orb, ring, tooth, shell
 -- color = optional, otherwise one is picked from the id
@@ -587,7 +732,7 @@ Finds.List = {
 	{ id = "pirate_chest", name = "Buried Pirate Chest", zone = "backyard", rarity = "Legendary", value = 3000, weight = { 20, 60 }, shape = "relic", color = Color3.fromRGB(140, 90, 40), event = true },
 	{ id = "meteorite", name = "Meteorite Chunk", zone = "desert", rarity = "Legendary", value = 12000, weight = { 5, 30 }, shape = "orb", color = Color3.fromRGB(70, 60, 80), event = true },
 	{ id = "mountain_heart", name = "Heart of the Mountain", zone = "caves", rarity = "Legendary", value = 50000, weight = { 5, 25 }, shape = "gem", color = Color3.fromRGB(255, 80, 200), event = true },
-	{ id = "sunken_crown", name = "Sunken King's Crown", zone = "ruins", rarity = "Legendary", value = 200000, weight = { 2, 6 }, shape = "ring", color = Color3.fromRGB(255, 215, 80), event = true },
+	{ id = "sunken_crown", name = "Sunken King's Crown", zone = "ruins", rarity = "Legendary", value = 200000, weight = { 2, 6 }, shape = "crown", color = Color3.fromRGB(255, 215, 80), event = true },
 	{ id = "phoenix_feather", name = "Phoenix Feather", zone = "volcano", rarity = "Legendary", value = 800000, weight = { 0.1, 0.5 }, shape = "relic", color = Color3.fromRGB(255, 160, 40), event = true },
 }
 
@@ -630,7 +775,7 @@ function Finds.CompletedPages(book)
 end
 
 return Finds
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">Format</string><ProtectedString name="Source"><![CDATA[-- Small helpers for showing numbers and times.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">Format</string><ProtectedString name="Source"><![CDATA[-- Small helpers for showing numbers and times.
 
 local Format = {}
 
@@ -681,7 +826,7 @@ function Format.Weight(kg)
 end
 
 return Format
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">Level</string><ProtectedString name="Source"><![CDATA[-- Digger level. Every find gives XP (more for rarer finds and new ones).
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">Level</string><ProtectedString name="Source"><![CDATA[-- Digger level. Every find gives XP (more for rarer finds and new ones).
 -- Your level shows above your head and pays a coin reward each time it goes up.
 
 local Finds = require(script.Parent.Finds)
@@ -728,7 +873,7 @@ function Level.XpForFind(findId, isNew)
 end
 
 return Level
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">Market</string><ProtectedString name="Source"><![CDATA[-- Trading Post prices. Every 30 minutes one find per zone is "in demand" and
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">Market</string><ProtectedString name="Source"><![CDATA[-- Trading Post prices. Every 30 minutes one find per zone is "in demand" and
 -- sells for double, so holding on to the right find can pay off.
 
 local Config = require(script.Parent.Config)
@@ -777,7 +922,82 @@ function Market.Price(entry, data, hot)
 end
 
 return Market
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">Remotes</string><ProtectedString name="Source"><![CDATA[-- All the messages between server and players. The server creates them;
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">OurGames</string><ProtectedString name="Source"><![CDATA[-- Our games and our Roblox community. This file is the same in all four games,
+-- so a change here should be copied to the other three repos.
+--
+-- The "Free Gift" menu lists the other games (with a Play button that takes
+-- you straight there). Each game gives a free, looks-only welcome gift to
+-- players who arrive from one of the others. Nothing here changes how well
+-- anyone plays.
+--
+-- CommunityId: our Roblox community's (group's) id, from its page address:
+--   roblox.com/communities/<id>/... . 0 = we don't have one (making one costs
+--   100 Robux): the menu shows no Join button. Members get the same gift.
+
+local OurGames = {}
+
+OurGames.CommunityId = 0
+OurGames.CommunityName = "Pandot Games"
+
+-- Shown on each game's card. universeId is the experience id (the icon comes
+-- from it), placeId is where the Play button sends you.
+OurGames.List = {
+	{
+		id = "fish",
+		name = "Hook a Mythic Fish!",
+		blurb = "Cast, reel and fill your fish book. Can you hook a Mythic?",
+		universeId = 10773137504,
+		placeId = 139801344157792,
+	},
+	{
+		id = "dig",
+		name = "Dig Up a Legendary!",
+		blurb = "Dig for treasure in 5 zones and fill your collection.",
+		universeId = 10773541582,
+		placeId = 83829887315860,
+	},
+	{
+		id = "bonk",
+		name = "Bonk Your Friends Off!",
+		blurb = "Foam hammer brawls for 2 to 4. Knock everyone off the arena.",
+		universeId = 10773598334,
+		placeId = 73590219706077,
+	},
+	{
+		id = "crown",
+		name = "Only 1 Gets the Crown!",
+		blurb = "12 players, crazy obby rounds, one crown. Can you win it?",
+		universeId = 10773678497,
+		placeId = 134072645580262,
+	},
+}
+
+OurGames.ById = {}
+for _, entry in ipairs(OurGames.List) do
+	OurGames.ById[entry.id] = entry
+end
+
+function OurGames.Icon(entry)
+	return string.format("rbxthumb://type=GameIcon&id=%d&w=150&h=150", entry.universeId)
+end
+
+function OurGames.CommunityIcon()
+	return string.format("rbxthumb://type=GroupIcon&id=%d&w=150&h=150", OurGames.CommunityId)
+end
+
+-- The other games, for the game with this id
+function OurGames.Others(thisId)
+	local list = {}
+	for _, entry in ipairs(OurGames.List) do
+		if entry.id ~= thisId then
+			table.insert(list, entry)
+		end
+	end
+	return list
+end
+
+return OurGames
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Remotes</string><ProtectedString name="Source"><![CDATA[-- All the messages between server and players. The server creates them;
 -- players wait for them to appear.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -834,7 +1054,7 @@ for _, name in ipairs(FUNCTIONS) do
 end
 
 return Remotes
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">Shop</string><ProtectedString name="Source"><![CDATA[-- Everything sold for Robux. Nothing here changes what you dig up or how
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">Shop</string><ProtectedString name="Source"><![CDATA[-- Everything sold for Robux. Nothing here changes what you dig up or how
 -- many coins you earn: only looks and time-savers.
 --
 -- HOW TO FILL IN THE IDS (step 5 of the build plan):
@@ -845,27 +1065,27 @@ return Remotes
 local Shop = {}
 
 Shop.Passes = {
-	{ id = "VIP", gamePassId = 0, name = "VIP", suggestedPrice = 250, description = "Golden VIP name tag, a crown, and access to the VIP lounge." },
-	{ id = "AutoSell", gamePassId = 0, name = "Auto Sell", suggestedPrice = 150, description = "Your backpack sells itself when it fills up, wherever you are." },
-	{ id = "BigBag", gamePassId = 0, name = "Big Backpack", suggestedPrice = 100, description = "Carry 60 finds instead of 20." },
-	{ id = "Teleporter", gamePassId = 0, name = "Zone Teleporter", suggestedPrice = 200, description = "Teleport to any zone you have unlocked." },
+	{ id = "VIP", gamePassId = 2057879657, name = "VIP", suggestedPrice = 250, description = "Golden VIP name tag, a crown, and access to the VIP lounge." },
+	{ id = "AutoSell", gamePassId = 2060422905, name = "Auto Sell", suggestedPrice = 150, description = "Your backpack sells itself when it fills up, wherever you are." },
+	{ id = "BigBag", gamePassId = 2058845634, name = "Big Backpack", suggestedPrice = 100, description = "Carry 60 finds instead of 20." },
+	{ id = "Teleporter", gamePassId = 2058899650, name = "Zone Teleporter", suggestedPrice = 200, description = "Teleport to any zone you have unlocked." },
 }
 
 -- kind: "shovelSkin" changes how your shovel looks, "trail" adds a trail behind you,
 -- "title" shows a title above your head.
 Shop.Cosmetics = {
-	{ id = "skin_golden", kind = "shovelSkin", name = "Golden Shovel Skin", productId = 0, suggestedPrice = 99, color = Color3.fromRGB(255, 200, 40), material = Enum.Material.Foil },
-	{ id = "skin_neon", kind = "shovelSkin", name = "Neon Pink Shovel Skin", productId = 0, suggestedPrice = 75, color = Color3.fromRGB(255, 60, 200), material = Enum.Material.Neon },
-	{ id = "skin_galaxy", kind = "shovelSkin", name = "Galaxy Shovel Skin", productId = 0, suggestedPrice = 149, color = Color3.fromRGB(110, 60, 255), material = Enum.Material.ForceField },
-	{ id = "skin_candy", kind = "shovelSkin", name = "Candy Shovel Skin", productId = 0, suggestedPrice = 49, color = Color3.fromRGB(255, 120, 150), material = Enum.Material.SmoothPlastic },
+	{ id = "skin_golden", kind = "shovelSkin", name = "Golden Shovel Skin", productId = 3723377192, suggestedPrice = 99, color = Color3.fromRGB(255, 200, 40), material = Enum.Material.Foil },
+	{ id = "skin_neon", kind = "shovelSkin", name = "Neon Pink Shovel Skin", productId = 3723377204, suggestedPrice = 75, color = Color3.fromRGB(255, 60, 200), material = Enum.Material.Neon },
+	{ id = "skin_galaxy", kind = "shovelSkin", name = "Galaxy Shovel Skin", productId = 3723377180, suggestedPrice = 149, color = Color3.fromRGB(110, 60, 255), material = Enum.Material.ForceField },
+	{ id = "skin_candy", kind = "shovelSkin", name = "Candy Shovel Skin", productId = 3723377224, suggestedPrice = 49, color = Color3.fromRGB(255, 120, 150), material = Enum.Material.SmoothPlastic },
 
-	{ id = "trail_sparkle", kind = "trail", name = "Sparkle Trail", productId = 0, suggestedPrice = 49, colors = { Color3.fromRGB(0, 170, 255), Color3.fromRGB(0, 255, 200) } },
-	{ id = "trail_fire", kind = "trail", name = "Fire Trail", productId = 0, suggestedPrice = 75, colors = { Color3.fromRGB(255, 220, 0), Color3.fromRGB(255, 40, 0) } },
-	{ id = "trail_rainbow", kind = "trail", name = "Rainbow Trail", productId = 0, suggestedPrice = 129, colors = { Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 255, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 120, 255), Color3.fromRGB(200, 0, 255) } },
+	{ id = "trail_sparkle", kind = "trail", name = "Sparkle Trail", productId = 3723377257, suggestedPrice = 49, colors = { Color3.fromRGB(0, 170, 255), Color3.fromRGB(0, 255, 200) } },
+	{ id = "trail_fire", kind = "trail", name = "Fire Trail", productId = 3723377243, suggestedPrice = 75, colors = { Color3.fromRGB(255, 220, 0), Color3.fromRGB(255, 40, 0) } },
+	{ id = "trail_rainbow", kind = "trail", name = "Rainbow Trail", productId = 3723377236, suggestedPrice = 129, colors = { Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 255, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 120, 255), Color3.fromRGB(200, 0, 255) } },
 
-	{ id = "title_lucky", kind = "title", name = "Title: Lucky Digger", text = "Lucky Digger", productId = 0, suggestedPrice = 25, color = Color3.fromRGB(120, 200, 255) },
-	{ id = "title_whisperer", kind = "title", name = "Title: Rock Whisperer", text = "Rock Whisperer", productId = 0, suggestedPrice = 49, color = Color3.fromRGB(160, 255, 160) },
-	{ id = "title_diglegend", kind = "title", name = "Title: Dig Legend", text = "Dig Legend", productId = 0, suggestedPrice = 99, color = Color3.fromRGB(255, 190, 60) },
+	{ id = "title_lucky", kind = "title", name = "Title: Lucky Digger", text = "Lucky Digger", productId = 3723377288, suggestedPrice = 25, color = Color3.fromRGB(120, 200, 255) },
+	{ id = "title_whisperer", kind = "title", name = "Title: Rock Whisperer", text = "Rock Whisperer", productId = 3723377276, suggestedPrice = 49, color = Color3.fromRGB(160, 255, 160) },
+	{ id = "title_diglegend", kind = "title", name = "Title: Dig Legend", text = "Dig Legend", productId = 3723377268, suggestedPrice = 99, color = Color3.fromRGB(255, 190, 60) },
 }
 
 -- Free titles earned by playing. The server checks the "rule".
@@ -877,6 +1097,10 @@ Shop.EarnedTitles = {
 	{ id = "earned_volcano", kind = "title", name = "Volcano Master", text = "Volcano Master", rule = "zoneBook", zone = "volcano", color = Color3.fromRGB(255, 110, 50) },
 	{ id = "earned_legend", kind = "title", name = "Legend Hunter", text = "Legend Hunter", rule = "eventFind", color = Color3.fromRGB(255, 150, 0) },
 	{ id = "earned_reborn", kind = "title", name = "Reborn", text = "Reborn", rule = "rebirth", color = Color3.fromRGB(255, 90, 160) },
+
+	-- Free for joining our community (see Shared/OurGames and the Free Gift menu)
+	{ id = "community_shovel", kind = "shovelSkin", name = "Crew Shovel Skin", community = true, color = Color3.fromRGB(0, 220, 200), material = Enum.Material.Neon },
+	{ id = "community_title", kind = "title", name = "Title: Pandot Crew", text = "Pandot Crew", community = true, color = Color3.fromRGB(0, 230, 210) },
 }
 
 Shop.PassById = {}
@@ -898,7 +1122,241 @@ for _, item in ipairs(Shop.EarnedTitles) do
 end
 
 return Shop
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Shovels</string><ProtectedString name="Source"><![CDATA[-- Shovels are bought with in-game coins only (never Robux).
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">ShovelModel</string><ProtectedString name="Source"><![CDATA[-- Builds the shovel the player holds: a round shaft with a D-grip on top, a
+-- metal collar with rivets, a shaped blade with a foot step, a center ridge and
+-- sharpened edges. Every shovel in Shovels.List has its own look, and the
+-- better ones glow, sparkle or smoke.
+--
+-- ShovelModel.Build(tool, shovel, length) adds the parts to the tool and
+-- returns its Handle (the shaft, from +length/2 at the top to -length/2 where
+-- the blade starts). Blade parts get the attribute Blade = true and edge/glow
+-- parts Trim = true, so shovel skins can recolor them.
+
+local CrownModel = require(script.Parent.CrownModel)
+
+local ShovelModel = {}
+
+local WOOD = Color3.fromRGB(150, 105, 62)
+local DARK_WOOD = Color3.fromRGB(95, 60, 35)
+local IRON = Color3.fromRGB(85, 88, 95)
+
+-- shape: "pointed" (round-point digging shovel) or "square" (garden spade)
+local LOOKS = {
+	trowel = {
+		shape = "pointed",
+		shaft = { WOOD, Enum.Material.Wood },
+		grip = { DARK_WOOD, Enum.Material.Wood },
+		collar = { IRON, Enum.Material.Metal },
+		blade = { Color3.fromRGB(150, 100, 70), Enum.Material.CorrodedMetal },
+		edge = { Color3.fromRGB(190, 175, 160), Enum.Material.Metal },
+	},
+	spade = {
+		shape = "square",
+		shaft = { WOOD, Enum.Material.Wood },
+		grip = { Color3.fromRGB(70, 130, 70), Enum.Material.SmoothPlastic },
+		collar = { Color3.fromRGB(60, 100, 60), Enum.Material.Metal },
+		blade = { Color3.fromRGB(110, 160, 95), Enum.Material.Metal },
+		edge = { Color3.fromRGB(210, 215, 220), Enum.Material.Metal },
+	},
+	steel = {
+		shape = "pointed",
+		shaft = { Color3.fromRGB(55, 58, 64), Enum.Material.Metal },
+		grip = { Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic },
+		collar = { Color3.fromRGB(150, 155, 165), Enum.Material.DiamondPlate },
+		blade = { Color3.fromRGB(200, 205, 215), Enum.Material.Metal },
+		edge = { Color3.fromRGB(240, 245, 250), Enum.Material.Metal },
+		reflectance = 0.15,
+	},
+	golden = {
+		shape = "pointed",
+		shaft = { Color3.fromRGB(80, 40, 20), Enum.Material.Wood },
+		grip = { Color3.fromRGB(255, 200, 40), Enum.Material.Foil },
+		collar = { Color3.fromRGB(255, 200, 40), Enum.Material.Foil },
+		blade = { Color3.fromRGB(255, 200, 40), Enum.Material.Foil },
+		edge = { Color3.fromRGB(255, 240, 170), Enum.Material.Foil },
+		reflectance = 0.2,
+		glint = true,
+	},
+	crystal = {
+		shape = "pointed",
+		shaft = { Color3.fromRGB(55, 35, 85), Enum.Material.SmoothPlastic },
+		grip = { Color3.fromRGB(190, 150, 255), Enum.Material.Neon },
+		collar = { Color3.fromRGB(210, 190, 255), Enum.Material.Glass },
+		blade = { Color3.fromRGB(170, 120, 255), Enum.Material.Glass, 0.2 },
+		edge = { Color3.fromRGB(215, 190, 255), Enum.Material.Neon },
+		light = Color3.fromRGB(170, 120, 255),
+		shards = true,
+		glint = true,
+	},
+	magma = {
+		shape = "pointed",
+		shaft = { Color3.fromRGB(40, 34, 34), Enum.Material.Basalt },
+		grip = { Color3.fromRGB(255, 100, 30), Enum.Material.Neon },
+		collar = { Color3.fromRGB(60, 50, 48), Enum.Material.Basalt },
+		blade = { Color3.fromRGB(50, 38, 36), Enum.Material.Basalt },
+		edge = { Color3.fromRGB(255, 110, 30), Enum.Material.Neon },
+		light = Color3.fromRGB(255, 110, 40),
+		embers = true,
+	},
+}
+ShovelModel.Looks = LOOKS
+
+local function part(parent, name, size, style, shape)
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Shape = shape or Enum.PartType.Block
+	p.Size = size
+	p.Color = style[1]
+	p.Material = style[2]
+	p.Transparency = style[3] or 0
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+	p.CastShadow = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = parent
+	return p
+end
+
+local function attach(handle, p, offset)
+	p.CFrame = handle.CFrame * offset
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = handle
+	weld.Part1 = p
+	weld.Parent = p
+	return p
+end
+
+local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- turns a cylinder (long along X) to stand along Y
+
+function ShovelModel.Build(tool, shovel, length)
+	local look = LOOKS[shovel.id] or LOOKS.trowel
+	local half = length / 2
+	local reflect = look.reflectance or 0
+
+	-- The Handle is the shaft's invisible core, so the hand grips stay the same
+	local handle = part(tool, "Handle", Vector3.new(0.3, length, 0.3), look.shaft)
+	handle.Transparency = 1
+	handle.CFrame = CFrame.new()
+
+	local function add(name, size, style, offset, shape)
+		return attach(handle, part(tool, name, size, style, shape), offset)
+	end
+	local function blade(p)
+		p:SetAttribute("Blade", true)
+		p.Reflectance = reflect
+		return p
+	end
+	local function trim(p)
+		p:SetAttribute("Trim", true)
+		return p
+	end
+
+	-- Shaft and D-grip
+	add("Shaft", Vector3.new(length, 0.26, 0.26), look.shaft, UPRIGHT, Enum.PartType.Cylinder)
+	for _, side in ipairs({ -1, 1 }) do
+		add("GripPost", Vector3.new(0.1, 0.62, 0.12), look.grip, CFrame.new(side * 0.13, half + 0.27, 0) * CFrame.Angles(0, 0, math.rad(-24 * side)))
+	end
+	add("GripBar", Vector3.new(0.66, 0.17, 0.17), look.grip, CFrame.new(0, half + 0.56, 0), Enum.PartType.Cylinder)
+
+	-- Collar with two rivets
+	add("Collar", Vector3.new(0.62, 0.36, 0.36), look.collar, CFrame.new(0, -half + 0.05, 0) * UPRIGHT, Enum.PartType.Cylinder)
+	for _, y in ipairs({ 0.12, -0.12 }) do
+		add("Rivet", Vector3.one * 0.09, look.edge, CFrame.new(0, -half + 0.05 + y, -0.17), Enum.PartType.Ball)
+	end
+
+	-- Blade: foot step along the top, the flat body, a center ridge and the tip
+	local top = -half - 0.22
+	local bodyHeight = look.shape == "square" and 1.3 or 0.95
+	local width = 1.3
+	local bladeColor = look.blade[1]
+	local ridgeStyle = { bladeColor:Lerp(Color3.new(0, 0, 0), 0.2), look.blade[2], look.blade[3] }
+	blade(add("Step", Vector3.new(width + 0.06, 0.12, 0.26), look.blade, CFrame.new(0, top, 0)))
+	blade(add("Blade", Vector3.new(width, bodyHeight, 0.12), look.blade, CFrame.new(0, top - bodyHeight / 2, 0)))
+	blade(add("Ridge", Vector3.new(0.2, bodyHeight * 0.8, 0.2), ridgeStyle, CFrame.new(0, top - bodyHeight * 0.4, 0)))
+	local bottom = top - bodyHeight
+
+	if look.shape == "square" then
+		trim(add("Edge", Vector3.new(width + 0.02, 0.08, 0.14), look.edge, CFrame.new(0, bottom, 0)))
+	else
+		local tipHeight = 0.6
+		-- The tip is a triangle pointing down (the frame is flipped upside down)
+		local wedges = CrownModel.Triangle(tool, handle, "Tip", width, tipHeight, 0.11, CFrame.new(0, bottom, 0) * CFrame.Angles(0, 0, math.pi), look.blade[1], look.blade[2])
+		for _, wedge in ipairs(wedges) do
+			wedge.Transparency = look.blade[3] or 0
+			blade(wedge)
+		end
+		-- Sharpened edges along both sides of the tip
+		local slant = math.sqrt((width / 2) ^ 2 + tipHeight ^ 2)
+		local angle = math.atan2(width / 2, tipHeight)
+		for _, side in ipairs({ -1, 1 }) do
+			trim(add("Edge", Vector3.new(0.08, slant, 0.14), look.edge, CFrame.new(side * width / 4, bottom - tipHeight / 2, 0) * CFrame.Angles(0, 0, -side * angle)))
+		end
+	end
+
+	-- Extras for the fancy shovels
+	local bladePart = tool:FindFirstChild("Blade")
+	if look.shards then
+		-- Three crystals growing out of the collar, the middle one tallest
+		for _, shard in ipairs({ { x = -0.2, tilt = 30, size = 0.36 }, { x = 0, tilt = 0, size = 0.5 }, { x = 0.2, tilt = -30, size = 0.36 } }) do
+			local offset = CFrame.new(shard.x, -half + 0.3 + shard.size / 2, 0.05) * CFrame.Angles(0, 0, math.rad(shard.tilt)) * CFrame.Angles(0, math.rad(45), 0)
+			trim(add("Shard", Vector3.new(0.13, shard.size, 0.13), look.edge, offset))
+		end
+	end
+	if look.light then
+		local light = Instance.new("PointLight")
+		light.Color = look.light
+		light.Range = 7
+		light.Brightness = 0.8
+		light.Parent = bladePart
+	end
+	if look.glint then
+		local glint = Instance.new("ParticleEmitter")
+		glint.Name = "Glint"
+		glint.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		glint.Color = ColorSequence.new(look.edge[1])
+		glint.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 0) })
+		glint.Lifetime = NumberRange.new(0.4, 0.7)
+		glint.Rate = 4
+		glint.Speed = NumberRange.new(0.2, 0.6)
+		glint.LightEmission = 1
+		glint.Parent = bladePart
+	end
+	if look.embers then
+		local embers = Instance.new("ParticleEmitter")
+		embers.Name = "Embers"
+		embers.Texture = "rbxasset://textures/particles/fire_main.dds"
+		embers.Color = ColorSequence.new(Color3.fromRGB(255, 170, 60), Color3.fromRGB(255, 60, 20))
+		embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0) })
+		embers.Transparency = NumberSequence.new(0.2, 1)
+		embers.Lifetime = NumberRange.new(0.4, 0.8)
+		embers.Rate = 8
+		embers.Speed = NumberRange.new(0.8, 1.6)
+		embers.EmissionDirection = Enum.NormalId.Top
+		embers.LightEmission = 1
+		embers.Parent = bladePart
+	end
+
+	return handle
+end
+
+-- Recolors the blade for a shovel skin (color + material from Shop.Cosmetics)
+function ShovelModel.ApplySkin(tool, skin)
+	for _, p in ipairs(tool:GetDescendants()) do
+		if p:IsA("BasePart") and p:GetAttribute("Blade") then
+			p.Color = skin.color
+			p.Material = skin.material
+			p.Transparency = 0
+		elseif p:IsA("BasePart") and p:GetAttribute("Trim") then
+			p.Color = skin.color:Lerp(Color3.new(1, 1, 1), 0.45)
+		end
+	end
+end
+
+return ShovelModel
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000010"><Properties><string name="Name">Shovels</string><ProtectedString name="Source"><![CDATA[-- Shovels are bought with in-game coins only (never Robux).
 -- luck: multiplies the chance of Rare and better finds
 -- speed: multiplies how long it takes to dig down (lower is faster)
 -- power: widens the green sweet spot in the dig minigame
@@ -923,7 +1381,7 @@ end
 Shovels.Default = "trowel"
 
 return Shovels
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000E"><Properties><string name="Name">Tutorial</string><ProtectedString name="Source"><![CDATA[-- Grandpa Gus's first-day guide. Each step points at a place in the world (a part
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000011"><Properties><string name="Name">Tutorial</string><ProtectedString name="Source"><![CDATA[-- Grandpa Gus's first-day guide. Each step points at a place in the world (a part
 -- with the matching "GuideTarget" attribute) and finishes on a game event.
 
 local Tutorial = {}
@@ -941,7 +1399,7 @@ Tutorial.RewardCoins = 250
 Tutorial.RewardCharm = { id = "clover", amount = 10 }
 
 return Tutorial
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000000F"><Properties><string name="Name">Zones</string><ProtectedString name="Source"><![CDATA[-- Digging zones, in the order you reach them. A zone needs a digger level and
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">Zones</string><ProtectedString name="Source"><![CDATA[-- Digging zones, in the order you reach them. A zone needs a digger level and
 -- in-game coins to unlock. short = name on the Collection tabs.
 
 local Zones = {}
@@ -969,7 +1427,7 @@ function Zones.Previous(zoneId)
 end
 
 return Zones
-]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX0000001E"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX0000001D"><Properties><string name="Name">Server</string><ProtectedString name="Source"><![CDATA[-- Dig Legends server. Starts every service in order.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX00000022"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000021"><Properties><string name="Name">Server</string><ProtectedString name="Source"><![CDATA[-- Dig Up a Legendary! server. Starts every service in order.
 
 local MapBuilder = require(script.MapBuilder)
 local DataService = require(script.DataService)
@@ -982,6 +1440,7 @@ local DigService = require(script.DigService)
 local WorldService = require(script.WorldService)
 local RushService = require(script.RushService)
 local BuddyService = require(script.BuddyService)
+local CommunityService = require(script.CommunityService)
 local Finds = require(game:GetService("ReplicatedStorage").Shared.Finds)
 
 MapBuilder.Build()
@@ -996,6 +1455,12 @@ WorldService.Start()
 RushService.Start(DigService.GiveRushLoot)
 BuddyService.Start()
 NpcService.Start()
+CommunityService.Start({
+	gameId = "dig",
+	rewards = { "community_shovel", "community_title" },
+	equip = { shovelSkin = "community_shovel", title = "community_title" },
+	rewardText = "Crew Shovel Skin and Pandot Crew title",
+})
 DataService.Start()
 
 -- Test helpers for Roblox Studio only (never in the live game). In the command
@@ -1030,8 +1495,8 @@ if game:GetService("RunService"):IsStudio() then
 	test.Parent = game:GetService("ServerStorage")
 end
 
-print("[Dig Legends] Server ready")
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000012"><Properties><string name="Name">BuddyService</string><ProtectedString name="Source"><![CDATA[-- Dig buddies: digging within 20 studs of a Roblox friend gives both of you
+print("[Dig Up a Legendary!] Server ready")
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">BuddyService</string><ProtectedString name="Source"><![CDATA[-- Dig buddies: digging within 20 studs of a Roblox friend gives both of you
 -- +10% coins for everything you dig up there. Each player's current buddy is
 -- kept in their "DigBuddy" attribute (the friend's display name), which
 -- DigService reads when a find comes up and the HUD shows on screen.
@@ -1140,7 +1605,232 @@ function BuddyService.Start()
 end
 
 return BuddyService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000013"><Properties><string name="Name">CosmeticService</string><ProtectedString name="Source"><![CDATA[-- Shows each player's name tag (name, digger level, title, VIP) and cosmetics:
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">CommunityService</string><ProtectedString name="Source"><![CDATA[-- Our community and our other games (the "Free Gift" menu). This file is the
+-- same in all four games; what differs is passed to CommunityService.Start.
+--
+-- Play our other games: the Play button teleports you to one of the others.
+-- Welcome gift: the first time a player arrives from one of our other games,
+-- they get a free, looks-only reward here (the cosmetics in options.rewards).
+-- So every game gives a gift for trying the others, and costs nothing to set up.
+-- Join our community (only once Shared/OurGames has a CommunityId): members
+-- get the same reward. Nothing is taken away later.
+--
+-- Custom events (Creator Dashboard > Analytics > Custom): WelcomeGift,
+-- CommunityReward, PlayOtherGame and ArrivedFromOurGame.
+
+local AnalyticsService = game:GetService("AnalyticsService")
+local GroupService = game:GetService("GroupService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local OurGames = require(Shared.OurGames)
+local Remotes = require(Shared.Remotes)
+
+local DataService = require(script.Parent.DataService)
+
+local CommunityService = {}
+
+local CHECK_COOLDOWN = 3 -- seconds between membership checks for one player
+local TELEPORT_COOLDOWN = 8
+
+local options = nil -- { gameId, rewards = { cosmetic ids }, equip = { [kind] = id } }
+local lastCheck = {} -- [player] = os.clock()
+local lastTeleport = {}
+
+local function log(player, eventName, field)
+	pcall(function()
+		-- "CustomField01" is Enum.AnalyticsCustomFieldKeys.CustomField01.Name
+		AnalyticsService:LogCustomEvent(player, eventName, 1, field and { CustomField01 = field } or nil)
+	end)
+end
+
+-- Asks Roblox whether the player is in our community
+function CommunityService.IsMember(player)
+	if OurGames.CommunityId == 0 then
+		return false
+	end
+	local ok, member = pcall(function()
+		return player:IsInGroupAsync(OurGames.CommunityId)
+	end)
+	if ok and member then
+		return true
+	end
+	-- IsInGroupAsync can remember an old "no" (from before they joined), so
+	-- ask for the player's communities fresh
+	local found, groups = pcall(function()
+		return GroupService:GetGroupsAsync(player.UserId)
+	end)
+	if found and type(groups) == "table" then
+		for _, group in ipairs(groups) do
+			if group.Id == OurGames.CommunityId then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Hands out any community reward the player doesn't have yet.
+-- Returns the number of new items.
+local function grant(player)
+	local added = DataService.Update(player, function(data)
+		data.community = data.community or {}
+		local count = 0
+		for _, id in ipairs(options.rewards) do
+			if not data.cosmetics.owned[id] then
+				data.cosmetics.owned[id] = true
+				count += 1
+			end
+		end
+		-- Wear the new looks right away, unless something is already on
+		for kind, id in pairs(options.equip or {}) do
+			if count > 0 and data.cosmetics.equipped[kind] == nil then
+				data.cosmetics.equipped[kind] = id
+			end
+		end
+		data.community.claimed = true
+		return count
+	end)
+	return added or 0
+end
+
+local function check(player, fromButton)
+	if not DataService.IsLoaded(player) then
+		return false, "Still loading, try again in a moment"
+	end
+	local now = os.clock()
+	if lastCheck[player] and now - lastCheck[player] < CHECK_COOLDOWN then
+		return false, "Checking... try again in a moment"
+	end
+	lastCheck[player] = now
+	local member = CommunityService.IsMember(player)
+	player:SetAttribute("CommunityMember", member)
+	if not member then
+		return false, fromButton and ("Join " .. OurGames.CommunityName .. " first, then press Claim") or nil
+	end
+	if grant(player) > 0 then
+		Remotes.Notify:FireClient(
+			player,
+			"Thanks for joining " .. OurGames.CommunityName .. "! " .. options.rewardText .. " unlocked.",
+			"rare"
+		)
+		log(player, "CommunityReward")
+	end
+	return true
+end
+
+local function play(player, id)
+	local entry = OurGames.ById[id]
+	if type(id) ~= "string" or not entry or entry.id == options.gameId then
+		return false, "Unknown game"
+	end
+	local now = os.clock()
+	if lastTeleport[player] and now - lastTeleport[player] < TELEPORT_COOLDOWN then
+		return false, "Already on the way..."
+	end
+	if RunService:IsStudio() then
+		return false, "Teleports only work in the live game, not in Studio"
+	end
+	lastTeleport[player] = now
+	local teleportOptions = Instance.new("TeleportOptions")
+	teleportOptions:SetTeleportData({ from = options.gameId })
+	local ok = pcall(function()
+		TeleportService:TeleportAsync(entry.placeId, { player }, teleportOptions)
+	end)
+	if not ok then
+		lastTeleport[player] = nil
+		return false, "Couldn't open " .. entry.name .. " right now. Try again soon."
+	end
+	log(player, "PlayOtherGame", entry.id)
+	return true
+end
+
+-- Which of our other games the player came from, if any. Roblox fills in
+-- SourcePlaceId itself; the teleport data is our own note from the Play button.
+local function cameFrom(player)
+	local ok, joinData = pcall(function()
+		return player:GetJoinData()
+	end)
+	if not ok or type(joinData) ~= "table" then
+		return nil
+	end
+	local source = joinData.SourcePlaceId
+	for _, entry in ipairs(OurGames.List) do
+		if entry.placeId == source and entry.id ~= options.gameId then
+			return entry
+		end
+	end
+	local from = type(joinData.TeleportData) == "table" and joinData.TeleportData.from
+	local entry = type(from) == "string" and OurGames.ById[from]
+	if entry and entry.id ~= options.gameId then
+		return entry
+	end
+	return nil
+end
+
+local function onPlayerAdded(player)
+	local fromGame = cameFrom(player)
+	if not DataService.WaitFor(player) then
+		return
+	end
+	if fromGame then
+		log(player, "ArrivedFromOurGame", fromGame.id)
+		if grant(player) > 0 then
+			Remotes.Notify:FireClient(
+				player,
+				"Welcome over from " .. fromGame.name .. "! Free welcome gift: " .. options.rewardText .. ".",
+				"rare"
+			)
+			log(player, "WelcomeGift", fromGame.id)
+		else
+			Remotes.Notify:FireClient(player, "Welcome back from " .. fromGame.name .. "!", "rare")
+		end
+	end
+	-- Joined the community on the website? Hand out the reward on arrival.
+	if OurGames.CommunityId ~= 0 then
+		check(player, false)
+	end
+end
+
+-- options: { gameId = "crown", rewards = { ids }, equip = { [kind] = id }, rewardText = "..." }
+function CommunityService.Start(startOptions)
+	options = startOptions
+
+	local folder = ReplicatedStorage:WaitForChild("Remotes")
+	local remote = Instance.new("RemoteFunction")
+	remote.Name = "Community"
+	remote.OnServerInvoke = function(player, request, argument)
+		if request == "claim" then
+			return check(player, true)
+		elseif request == "play" then
+			return play(player, argument)
+		end
+		return false
+	end
+	remote.Parent = folder
+
+	TeleportService.TeleportInitFailed:Connect(function(player)
+		lastTeleport[player] = nil
+		Remotes.Notify:FireClient(player, "That game couldn't open right now. Try again soon.", "warning")
+	end)
+
+	Players.PlayerAdded:Connect(function(player)
+		task.spawn(onPlayerAdded, player) -- it waits for the save to load
+	end)
+	for _, player in ipairs(Players:GetPlayers()) do
+		task.spawn(onPlayerAdded, player)
+	end
+	Players.PlayerRemoving:Connect(function(player)
+		lastCheck[player] = nil
+		lastTeleport[player] = nil
+	end)
+end
+
+return CommunityService
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">CosmeticService</string><ProtectedString name="Source"><![CDATA[-- Shows each player's name tag (name, digger level, title, VIP) and cosmetics:
 -- trails, shovel skins and VIP extras.
 -- Also hands out free titles players earn by playing.
 
@@ -1153,6 +1843,8 @@ local Shop = require(Shared.Shop)
 local Remotes = require(Shared.Remotes)
 local Level = require(Shared.Level)
 local Zones = require(Shared.Zones)
+local CrownModel = require(Shared.CrownModel)
+local ShovelModel = require(Shared.ShovelModel)
 
 local DataService = require(script.Parent.DataService)
 local ShopService = require(script.Parent.ShopService)
@@ -1167,12 +1859,11 @@ local function equippedItem(data, kind)
 	return id and data.cosmetics.owned[id] and Shop.CosmeticById[id] or nil
 end
 
-function CosmeticService.StyleShovel(player, blade)
+function CosmeticService.StyleShovel(player, tool)
 	local data = DataService.Get(player)
 	local skin = data and equippedItem(data, "shovelSkin")
 	if skin then
-		blade.Color = skin.color
-		blade.Material = skin.material
+		ShovelModel.ApplySkin(tool, skin)
 	end
 end
 
@@ -1240,19 +1931,17 @@ local function applyToCharacter(player)
 	gui.Parent = head
 
 	if vip then
-		local crown = Instance.new("Part")
+		local crown = Instance.new("Model")
 		crown.Name = "DigCrown"
-		crown.Size = Vector3.new(1.1, 0.5, 1.1)
-		crown.Color = VIP_GOLD
-		crown.Material = Enum.Material.Neon
-		crown.CanCollide = false
-		crown.CanQuery = false
-		crown.Massless = true
-		local weld = Instance.new("Weld")
+		-- Wide enough and high enough to sit on top of most hair
+		local radius = math.min(head.Size.X, head.Size.Z) * 0.5
+		local core = CrownModel.AddTo(crown, radius, { color = VIP_GOLD })
+		crown.PrimaryPart = core
+		crown:PivotTo(head.CFrame * CFrame.new(0, head.Size.Y / 2 + radius * 0.8, 0) * CFrame.Angles(math.rad(-6), 0, 0))
+		local weld = Instance.new("WeldConstraint")
 		weld.Part0 = head
-		weld.Part1 = crown
-		weld.C0 = CFrame.new(0, head.Size.Y / 2 + 0.3, 0)
-		weld.Parent = crown
+		weld.Part1 = core
+		weld.Parent = core
 		crown.Parent = character
 	end
 
@@ -1362,7 +2051,7 @@ function CosmeticService.Start()
 end
 
 return CosmeticService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000014"><Properties><string name="Name">DataService</string><ProtectedString name="Source"><![CDATA[-- Loads, saves and hands out each player's save data.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">DataService</string><ProtectedString name="Source"><![CDATA[-- Loads, saves and hands out each player's save data.
 -- Other scripts change data with DataService.Update(player, function(data) ... end)
 -- so the player's screen and leaderboard always refresh afterwards.
 
@@ -1663,7 +2352,7 @@ function DataService.Start()
 end
 
 return DataService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000015"><Properties><string name="Name">DigService</string><ProtectedString name="Source"><![CDATA[-- Dig spots, digging down and finds. The server decides what is buried and
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">DigService</string><ProtectedString name="Source"><![CDATA[-- Dig spots, digging down and finds. The server decides what is buried and
 -- checks the timing, so players can't pick their own finds. The dig minigame
 -- runs on the player's screen using the shared Dig rules.
 --
@@ -1683,6 +2372,7 @@ local Events = require(Shared.Events)
 local Charms = require(Shared.Charms)
 local Dig = require(Shared.Dig)
 local FindModel = require(Shared.FindModel)
+local ShovelModel = require(Shared.ShovelModel)
 local Level = require(Shared.Level)
 local Format = require(Shared.Format)
 local Remotes = require(Shared.Remotes)
@@ -1702,7 +2392,7 @@ local WANDER_LIMIT = 6 -- studs a player may drift from where they started diggi
 local SHOVEL_LENGTH = 5
 -- How far the shovel leans while held. If it points the wrong way in Studio,
 -- flip the sign (e.g. to 35).
-local SHOVEL_TILT = -35
+local SHOVEL_TILT = -55
 
 local random = Random.new()
 local digs = {} -- [player] = current dig
@@ -2177,33 +2867,12 @@ local function buildShovel(player)
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
 
-	local handle = Instance.new("Part")
-	handle.Name = "Handle"
-	handle.Size = Vector3.new(0.3, SHOVEL_LENGTH, 0.3)
-	handle.CanCollide = false
-	handle.Massless = true
-	handle.Color = Color3.fromRGB(130, 90, 55)
-	handle.Material = Enum.Material.Wood
-	handle.Parent = tool
-
-	local blade = Instance.new("Part")
-	blade.Name = "Blade"
-	blade.Size = Vector3.new(1.3, 1.5, 0.2)
-	blade.CanCollide = false
-	blade.Massless = true
-	blade.Color = shovel.color
-	blade.Material = Enum.Material.Metal
-	blade.CFrame = handle.CFrame * CFrame.new(0, -SHOVEL_LENGTH / 2 - 0.6, 0)
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = handle
-	weld.Part1 = blade
-	weld.Parent = blade
-	blade.Parent = tool
+	ShovelModel.Build(tool, shovel, SHOVEL_LENGTH)
 
 	-- Hold the shovel near its top end, blade down
 	tool.Grip = gripFor(0)
 
-	CosmeticService.StyleShovel(player, blade)
+	CosmeticService.StyleShovel(player, tool)
 	return tool
 end
 
@@ -2296,7 +2965,7 @@ function DigService.Start()
 end
 
 return DigService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000016"><Properties><string name="Name">EconomyService</string><ProtectedString name="Source"><![CDATA[-- Coins: the Trading Post, charms, bounties, shovels, zones, rebirths and daily
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">EconomyService</string><ProtectedString name="Source"><![CDATA[-- Coins: the Trading Post, charms, bounties, shovels, zones, rebirths and daily
 -- rewards, plus the menu buttons players press (all go through the "Action" remote).
 
 local Workspace = game:GetService("Workspace")
@@ -2769,7 +3438,7 @@ function EconomyService.Start()
 end
 
 return EconomyService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000017"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds a simple starter world (Dig Town + one island per zone) when the place
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- Builds a simple starter world (Dig Town + one island per zone) when the place
 -- has no folder called "Map" in Workspace. That means the game is playable the
 -- moment you press Play. To use your own scenery later, the game only cares
 -- about parts with these attributes:
@@ -3442,7 +4111,7 @@ function MapBuilder.Build()
 end
 
 return MapBuilder
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000018"><Properties><string name="Name">NpcService</string><ProtectedString name="Source"><![CDATA[-- Shopkeepers and Grandpa Gus. They stand on parts with an "Npc" attribute
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">NpcService</string><ProtectedString name="Source"><![CDATA[-- Shopkeepers and Grandpa Gus. They stand on parts with an "Npc" attribute
 -- (MapBuilder places them at each stall) and face the way that part faces.
 
 local Players = game:GetService("Players")
@@ -3554,7 +4223,7 @@ function NpcService.Start()
 end
 
 return NpcService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000019"><Properties><string name="Name">RushService</string><ProtectedString name="Source"><![CDATA[-- Treasure Rush: every 15 minutes a big glowing dig site pops up in Dig Town.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001D"><Properties><string name="Name">RushService</string><ProtectedString name="Source"><![CDATA[-- Treasure Rush: every 15 minutes a big glowing dig site pops up in Dig Town.
 -- Everyone digs it with the normal dig minigame, and every good dig fills the
 -- site a bit. When it is full, every helper gets a guaranteed Rare or better
 -- find from the best zone they have unlocked (Epic or better when 3 or more
@@ -3890,7 +4559,7 @@ function RushService.Start(loot)
 end
 
 return RushService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001A"><Properties><string name="Name">ShopService</string><ProtectedString name="Source"><![CDATA[-- Robux purchases: game passes (VIP, Auto Sell, Big Backpack, Teleporter) and
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001E"><Properties><string name="Name">ShopService</string><ProtectedString name="Source"><![CDATA[-- Robux purchases: game passes (VIP, Auto Sell, Big Backpack, Teleporter) and
 -- cosmetic developer products.
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -3988,7 +4657,7 @@ function ShopService.Start()
 end
 
 return ShopService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001B"><Properties><string name="Name">TutorialService</string><ProtectedString name="Source"><![CDATA[-- Moves players through Grandpa Gus's first-day guide (see Shared/Tutorial).
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">TutorialService</string><ProtectedString name="Source"><![CDATA[-- Moves players through Grandpa Gus's first-day guide (see Shared/Tutorial).
 -- Other services call TutorialService.Event(player, "Dig") etc.
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -4042,7 +4711,7 @@ function TutorialService.Start()
 end
 
 return TutorialService
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000001C"><Properties><string name="Name">WorldService</string><ProtectedString name="Source"><![CDATA[-- Connects the world to the game: shop and Trading Post prompts, zone gates,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">WorldService</string><ProtectedString name="Source"><![CDATA[-- Connects the world to the game: shop and Trading Post prompts, zone gates,
 -- the global leaderboard board and the weekly event board.
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -4217,7 +4886,7 @@ function WorldService.Start()
 end
 
 return WorldService
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX0000002A"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000029"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000028"><Properties><string name="Name">Client</string><ProtectedString name="Source"><![CDATA[-- Dig Legends player script. Builds the screen and starts digging controls.
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX00000030"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX0000002F"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX0000002E"><Properties><string name="Name">Client</string><ProtectedString name="Source"><![CDATA[-- Dig Up a Legendary! player script. Builds the screen and starts digging controls.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -4230,6 +4899,8 @@ local Hud = require(script.Hud)
 local Digging = require(script.Digging)
 local World = require(script.World)
 local Guide = require(script.Guide)
+local Community = require(script.Community)
+local MenuLock = require(script.MenuLock)
 
 local player = Players.LocalPlayer
 
@@ -4267,12 +4938,19 @@ local diggingGui = UI.new("ScreenGui", {
 Notifications.Init(screenGui)
 CameraController.Init(diggingGui)
 Panels.Init(screenGui)
+Community.Init(screenGui, {
+	gameId = "dig",
+	rewardText = "the Crew Shovel Skin and the Pandot Crew title",
+	key = Enum.KeyCode.G,
+})
+Panels.Community = Community.window
 Hud.Init(screenGui)
 Digging.Init(diggingGui)
 World.Init()
 Guide.Init(screenGui)
+MenuLock.Init()
 
-]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX0000001F"><Properties><string name="Name">CameraController</string><ProtectedString name="Source"><![CDATA[-- Over-the-shoulder camera for mouse players: moving the mouse turns the camera
+]]></ProtectedString></Properties><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">CameraController</string><ProtectedString name="Source"><![CDATA[-- Over-the-shoulder camera for mouse players: moving the mouse turns the camera
 -- and your character, like most action games. The mouse is free again whenever
 -- a menu is open, or when you press Alt (press again to lock it).
 -- Phones and tablets keep Roblox's normal touch camera.
@@ -4438,7 +5116,240 @@ function CameraController.Init(screenGui)
 end
 
 return CameraController
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000020"><Properties><string name="Name">Digging</string><ProtectedString name="Source"><![CDATA[-- Digging on the player's screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Community</string><ProtectedString name="Source"><![CDATA[-- The "Free Gift" menu: Play buttons for our other games, each of which gives
+-- a free, looks-only welcome gift to players who arrive from another of our
+-- games (and, once we have one, a Join button for our community). This file is the same in all four games;
+-- what differs is passed to Community.Init. Also two friendly reminders per
+-- visit (a short message, never a pop-up window).
+
+local GroupService = game:GetService("GroupService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local OurGames = require(Shared.OurGames)
+
+local UI = require(script.Parent.UI)
+local State = require(script.Parent.State)
+local Notifications = require(script.Parent.Notifications)
+local T = UI.Theme
+
+local player = Players.LocalPlayer
+local Community = {}
+
+local GIFT_REMINDER = 90 -- seconds into a visit
+local GAMES_REMINDER = 12 * 60
+
+local remote = nil
+local options = nil -- { gameId, rewardText, key }
+local busy = false
+
+local function call(request, argument)
+	if not remote then
+		return false, "Connection problem, try again"
+	end
+	local ok, success, message = pcall(function()
+		return remote:InvokeServer(request, argument)
+	end)
+	if not ok then
+		return false, "Connection problem, try again"
+	end
+	return success, message
+end
+
+local function claimed()
+	local data = State.data
+	return data ~= nil and data.community ~= nil and data.community.claimed == true
+end
+
+local function isMember()
+	return player:GetAttribute("CommunityMember") == true
+end
+
+local function card(parent, height, order)
+	return UI.new("Frame", {
+		Size = UDim2.new(1, -8, 0, height),
+		BackgroundColor3 = T.Card,
+		LayoutOrder = order,
+		Parent = parent,
+	}, { UI.corner(10) })
+end
+
+local function heading(parent, text, order)
+	UI.label(text, {
+		Size = UDim2.new(1, -8, 0, 30),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = T.Gold,
+		LayoutOrder = order,
+		Parent = parent,
+	})
+end
+
+local function icon(parent, image)
+	UI.new("ImageLabel", {
+		Position = UDim2.fromOffset(10, 10),
+		Size = UDim2.fromOffset(64, 64),
+		BackgroundColor3 = T.Background,
+		Image = image,
+		ScaleType = Enum.ScaleType.Crop,
+		Parent = parent,
+	}, { UI.corner(10) })
+end
+
+local function texts(parent, title, body, width)
+	UI.label(title, {
+		Position = UDim2.fromOffset(86, 8),
+		Size = UDim2.new(width, -86, 0, 28),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	})
+	UI.label(body, {
+		Position = UDim2.fromOffset(86, 38),
+		Size = UDim2.new(width, -86, 0, 38),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextScaled = false,
+		TextSize = 15,
+		TextWrapped = true,
+		Font = T.BodyFont,
+		TextColor3 = T.Muted,
+		Parent = parent,
+	})
+end
+
+local function sideButton(parent, text, color, onClick)
+	return UI.button(text, color, onClick, {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(130, 42),
+		Parent = parent,
+	})
+end
+
+local function claim()
+	local ok, message = call("claim")
+	if not ok and message then
+		Notifications.Show(message, "warning")
+	end
+	if Community.window then
+		Community.window.refresh()
+	end
+end
+
+local function join()
+	if busy then
+		return
+	end
+	busy = true
+	local ok, status = pcall(function()
+		return GroupService:PromptJoinAsync(OurGames.CommunityId)
+	end)
+	if not ok then
+		Notifications.Show("Couldn't open the join window. Search for " .. OurGames.CommunityName .. " on Roblox.", "warning")
+	else
+		-- Closed without joining: nothing to claim (the server checks again anyway)
+		local known, closed = pcall(function()
+			return status == Enum.GroupMembershipStatus.None
+		end)
+		if not (known and closed) then
+			claim()
+		end
+	end
+	busy = false
+end
+
+local function render(body)
+	UI.list(8).Parent = body
+
+	-- This game's welcome gift
+	heading(body, "Free welcome gift in every game", 1)
+	local gift = card(body, 84, 2)
+	local here = OurGames.ById[options.gameId]
+	if here then
+		icon(gift, OurGames.Icon(here))
+	end
+	texts(
+		gift,
+		"Your gift here",
+		"Come here from one of our other games and get " .. options.rewardText .. ". Looks only, yours to keep.",
+		0.74
+	)
+	sideButton(gift, claimed() and "Claimed" or "Not yet", T.Card)
+
+	-- Our community (only once there is one)
+	if OurGames.CommunityId ~= 0 then
+		local community = card(body, 84, 3)
+		icon(community, OurGames.CommunityIcon())
+		texts(community, OurGames.CommunityName, "Join our community for free and get the same gift.", 0.74)
+		if claimed() then
+			sideButton(community, "Claimed", T.Card)
+		elseif isMember() then
+			sideButton(community, "Claim", T.Good, function()
+				task.spawn(claim)
+			end)
+		else
+			sideButton(community, "Join", T.Good, function()
+				task.spawn(join)
+			end)
+		end
+	end
+
+	-- Our other games
+	heading(body, "Play our other games (a free gift in each)", 4)
+	for index, entry in ipairs(OurGames.Others(options.gameId)) do
+		local row = card(body, 84, 4 + index)
+		icon(row, OurGames.Icon(entry))
+		texts(row, entry.name, entry.blurb, 0.74)
+		local button
+		button = sideButton(row, "Play", T.Accent, function()
+			button.Text = "Going..."
+			local ok, message = call("play", entry.id)
+			if not ok then
+				button.Text = "Play"
+				if message then
+					Notifications.Show(message, "warning")
+				end
+			end
+		end)
+	end
+end
+
+local function shortcut()
+	return UserInputService.KeyboardEnabled and (" (" .. options.key.Name .. ")") or ""
+end
+
+-- options: { gameId = "crown", rewardText = "the Pandot Crew title and ...", key = Enum.KeyCode.G }
+-- Opened with Community.window.toggle() (the Hud's Free Gift button).
+function Community.Init(screenGui, initOptions)
+	options = initOptions
+	Community.window = UI.window(screenGui, "Free Gift", render)
+
+	task.spawn(function()
+		remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Community")
+	end)
+
+	-- Show the right button after the server checks membership or the reward lands
+	player:GetAttributeChangedSignal("CommunityMember"):Connect(function()
+		Community.window.refresh()
+	end)
+	State.Changed:Connect(function()
+		Community.window.refresh()
+	end)
+
+	-- Two friendly reminders per visit
+	task.delay(GIFT_REMINDER, function()
+		Notifications.Show("Free gifts! Play our other games from Free Gift" .. shortcut() .. ": each one gives you a gift.", "rare")
+	end)
+	task.delay(GAMES_REMINDER, function()
+		local others = OurGames.Others(options.gameId)
+		local pick = others[math.random(1, #others)]
+		Notifications.Show("Try " .. pick.name .. " too! Open Free Gift" .. shortcut() .. " to play.", "info")
+	end)
+end
+
+return Community
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">Digging</string><ProtectedString name="Source"><![CDATA[-- Digging on the player's screen.
 --   1. Take out the shovel and stand next to a sparkling dig spot. The text
 --      under the middle of the screen tells you if you can dig there.
 --   2. Click to dig down. Walking away stops digging.
@@ -4487,6 +5398,7 @@ local aimLabel
 local highlight
 
 local phase = "idle" -- idle, starting, digging, minigame, done
+local findCardUntil = 0 -- no new dig until the "Found!" card is gone (os.clock time)
 local digId = nil
 local digSpot = nil
 local token = 0
@@ -4654,7 +5566,7 @@ end
 
 -- Click / tap with the shovel out
 local function onActivated()
-	if phase == "idle" then
+	if phase == "idle" and not UI.IsWindowOpen() and os.clock() >= findCardUntil then
 		startDig()
 	end
 end
@@ -4833,12 +5745,17 @@ local function startMinigame(id, params)
 			or input.KeyCode == Enum.KeyCode.ButtonA
 	end
 	table.insert(connections, UserInputService.InputBegan:Connect(function(input, processed)
-		if isTapInput(input) and not (processed and input.UserInputType == Enum.UserInputType.Touch) then
+		if isTapInput(input) and not (processed and input.UserInputType == Enum.UserInputType.Touch) and not UI.IsWindowOpen() then
 			tap()
 		end
 	end))
 
 	table.insert(connections, RunService.RenderStepped:Connect(function(dt)
+		-- A menu window pauses the minigame and hides it until the window closes
+		box.Visible = not UI.IsWindowOpen()
+		if not box.Visible then
+			return
+		end
 		elapsed += math.min(dt, 0.1)
 		marker.Position = UDim2.fromScale(Dig.MarkerAt(elapsed, params.speed), 0.5)
 		if elapsed > Dig.MaxSeconds then
@@ -4873,7 +5790,7 @@ local function updateAim()
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local holding = character and character:FindFirstChild(SHOVEL_NAME)
-	if phase ~= "idle" or not holding or not root or UI.IsWindowOpen() then
+	if phase ~= "idle" or not holding or not root or UI.IsWindowOpen() or os.clock() < findCardUntil then
 		aimLabel.Visible = false
 		highlight.Adornee = nil
 		CameraController.SetCrosshairColor(nil)
@@ -4957,6 +5874,7 @@ local function showFind(result)
 		TextColor3 = (bonus > 0 or result.buddy or result.rushLoot) and T.Gold or T.Muted,
 		Parent = card,
 	})
+	findCardUntil = os.clock() + 2.8
 	task.delay(2.5, function()
 		local tween = TweenService:Create(card, TweenInfo.new(0.3), { BackgroundTransparency = 1 })
 		tween:Play()
@@ -5067,7 +5985,7 @@ function Digging.Init(gui)
 end
 
 return Digging
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000021"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[-- Grandpa Gus's first-day guide on screen: the current goal at the top, a golden
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000026"><Properties><string name="Name">Guide</string><ProtectedString name="Source"><![CDATA[-- Grandpa Gus's first-day guide on screen: the current goal at the top, a golden
 -- line from you to where you need to go, and Gus talking above his head.
 
 local Players = game:GetService("Players")
@@ -5247,7 +6165,7 @@ function Guide.Init(screenGui)
 end
 
 return Guide
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000022"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- Always-on screen info: coins, bag, the weekly event, Treasure Rush and dig
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000027"><Properties><string name="Name">Hud</string><ProtectedString name="Source"><![CDATA[-- Always-on screen info: coins, bag, the weekly event, Treasure Rush and dig
 -- buddy news, and the menu buttons.
 
 local Players = game:GetService("Players")
@@ -5427,6 +6345,7 @@ function Hud.Init(screenGui)
 		{ "Shop", "Shop", Color3.fromRGB(70, 200, 110), Enum.KeyCode.P },
 		{ "Travel", "Teleport", Color3.fromRGB(170, 100, 255), Enum.KeyCode.T },
 		{ "Rebirth", "Rebirth", Color3.fromRGB(255, 90, 160), nil },
+		{ "Free Gift", "Community", Color3.fromRGB(255, 170, 30), Enum.KeyCode.G },
 	}
 	local shortcuts = {}
 	for index, info in ipairs(buttons) do
@@ -5454,7 +6373,74 @@ function Hud.Init(screenGui)
 end
 
 return Hud
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000023"><Properties><string name="Name">Notifications</string><ProtectedString name="Source"><![CDATA[-- Small messages that pop up on the right side of the screen.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000028"><Properties><string name="Name">MenuLock</string><ProtectedString name="Source"><![CDATA[-- While a menu window is open the player can't walk, jump, switch tools or use
+-- prompts. Everything comes back when the window closes. (Digging already
+-- won't start while a window is open, see Digging.luau.)
+
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local StarterGui = game:GetService("StarterGui")
+
+local UI = require(script.Parent.UI)
+
+local MenuLock = {}
+
+local player = Players.LocalPlayer
+local controls = nil
+local locked = false
+
+local function getControls()
+	if controls then
+		return controls
+	end
+	local ok, result = pcall(function()
+		local module = player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule", 10)
+		return module and require(module):GetControls()
+	end)
+	if ok and result then
+		controls = result
+	end
+	return controls
+end
+
+local function setBackpack(on)
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, on)
+	end)
+end
+
+local function apply()
+	local open = UI.IsWindowOpen()
+	if open == locked then
+		return
+	end
+	locked = open
+	local c = getControls()
+	if c then
+		if open then
+			c:Disable()
+		else
+			c:Enable()
+		end
+	end
+	ProximityPromptService.Enabled = not open
+	setBackpack(not open)
+end
+
+function MenuLock.IsLocked()
+	return locked
+end
+
+function MenuLock.Init()
+	task.spawn(getControls)
+	-- Deferred so switching straight from one window to another doesn't unlock in between
+	UI.WindowChanged:Connect(function()
+		task.defer(apply)
+	end)
+end
+
+return MenuLock
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000029"><Properties><string name="Name">Notifications</string><ProtectedString name="Source"><![CDATA[-- Small messages that pop up on the right side of the screen.
 
 local TweenService = game:GetService("TweenService")
 
@@ -5528,7 +6514,7 @@ function Notifications.Show(text, kind)
 end
 
 return Notifications
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000024"><Properties><string name="Name">Panels</string><ProtectedString name="Source"><![CDATA[-- The menus: Backpack, Trading Post, Charm Cart, Bounties, Collection, Shovels,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000002A"><Properties><string name="Name">Panels</string><ProtectedString name="Source"><![CDATA[-- The menus: Backpack, Trading Post, Charm Cart, Bounties, Collection, Shovels,
 -- Shop, Travel and Rebirth.
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -5976,6 +6962,14 @@ local function renderShop(body)
 			button.Activated:Connect(function()
 				act("EquipCosmetic", item.id)
 			end)
+		elseif item.community then
+			button.Text = "Free Gift"
+			button.BackgroundColor3 = T.Gold
+			button.Activated:Connect(function()
+				if Panels.Community then
+					Panels.Community.open()
+				end
+			end)
 		elseif item.earned then
 			button.Text = "Not earned"
 			button.BackgroundColor3 = T.Card
@@ -6010,7 +7004,7 @@ local function renderShop(body)
 			cosmeticRow(item)
 		end
 	end
-	heading(body, "Earned titles (free, unlocked by playing)", nextOrder())
+	heading(body, "Free extras (earned by playing, or from the Free Gift)", nextOrder())
 	for _, item in ipairs(Shop.EarnedTitles) do
 		cosmeticRow(item)
 	end
@@ -6122,7 +7116,7 @@ function Panels.Init(screenGui)
 end
 
 return Panels
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000025"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[-- The player's latest save data, as sent by the server.
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000002B"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[-- The player's latest save data, as sent by the server.
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
@@ -6157,7 +7151,7 @@ function State.Action(actionName, argument)
 end
 
 return State
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000026"><Properties><string name="Name">UI</string><ProtectedString name="Source"><![CDATA[-- Helpers for building the on-screen menus in code, so nothing has to be
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000002C"><Properties><string name="Name">UI</string><ProtectedString name="Source"><![CDATA[-- Helpers for building the on-screen menus in code, so nothing has to be
 -- drawn by hand in Studio. Colors and fonts live in UI.Theme.
 
 local UI = {}
@@ -6340,7 +7334,7 @@ function UI.window(screenGui, title, render)
 end
 
 return UI
-]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX00000027"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[-- Things in the world that only this player sees: weather, opened zone gates,
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX0000002D"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[-- Things in the world that only this player sees: weather, opened zone gates,
 -- the VIP door, and ambient life (seagulls).
 
 local Lighting = game:GetService("Lighting")

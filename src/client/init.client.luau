@@ -12,6 +12,7 @@ local Digging = require(script.Digging)
 local World = require(script.World)
 local Guide = require(script.Guide)
 local Community = require(script.Community)
+local MenuLock = require(script.MenuLock)
 
 local player = Players.LocalPlayer
 
@@ -59,4 +60,5 @@ Hud.Init(screenGui)
 Digging.Init(diggingGui)
 World.Init()
 Guide.Init(screenGui)
+MenuLock.Init()
 

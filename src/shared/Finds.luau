@@ -98,7 +98,7 @@ Finds.List = {
 	{ id = "pirate_chest", name = "Buried Pirate Chest", zone = "backyard", rarity = "Legendary", value = 3000, weight = { 20, 60 }, shape = "relic", color = Color3.fromRGB(140, 90, 40), event = true },
 	{ id = "meteorite", name = "Meteorite Chunk", zone = "desert", rarity = "Legendary", value = 12000, weight = { 5, 30 }, shape = "orb", color = Color3.fromRGB(70, 60, 80), event = true },
 	{ id = "mountain_heart", name = "Heart of the Mountain", zone = "caves", rarity = "Legendary", value = 50000, weight = { 5, 25 }, shape = "gem", color = Color3.fromRGB(255, 80, 200), event = true },
-	{ id = "sunken_crown", name = "Sunken King's Crown", zone = "ruins", rarity = "Legendary", value = 200000, weight = { 2, 6 }, shape = "ring", color = Color3.fromRGB(255, 215, 80), event = true },
+	{ id = "sunken_crown", name = "Sunken King's Crown", zone = "ruins", rarity = "Legendary", value = 200000, weight = { 2, 6 }, shape = "crown", color = Color3.fromRGB(255, 215, 80), event = true },
 	{ id = "phoenix_feather", name = "Phoenix Feather", zone = "volcano", rarity = "Legendary", value = 800000, weight = { 0.1, 0.5 }, shape = "relic", color = Color3.fromRGB(255, 160, 40), event = true },
 }
 

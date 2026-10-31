@@ -11,6 +11,8 @@ local Shop = require(Shared.Shop)
 local Remotes = require(Shared.Remotes)
 local Level = require(Shared.Level)
 local Zones = require(Shared.Zones)
+local CrownModel = require(Shared.CrownModel)
+local ShovelModel = require(Shared.ShovelModel)
 
 local DataService = require(script.Parent.DataService)
 local ShopService = require(script.Parent.ShopService)
@@ -25,12 +27,11 @@ local function equippedItem(data, kind)
 	return id and data.cosmetics.owned[id] and Shop.CosmeticById[id] or nil
 end
 
-function CosmeticService.StyleShovel(player, blade)
+function CosmeticService.StyleShovel(player, tool)
 	local data = DataService.Get(player)
 	local skin = data and equippedItem(data, "shovelSkin")
 	if skin then
-		blade.Color = skin.color
-		blade.Material = skin.material
+		ShovelModel.ApplySkin(tool, skin)
 	end
 end
 
@@ -98,19 +99,17 @@ local function applyToCharacter(player)
 	gui.Parent = head
 
 	if vip then
-		local crown = Instance.new("Part")
+		local crown = Instance.new("Model")
 		crown.Name = "DigCrown"
-		crown.Size = Vector3.new(1.1, 0.5, 1.1)
-		crown.Color = VIP_GOLD
-		crown.Material = Enum.Material.Neon
-		crown.CanCollide = false
-		crown.CanQuery = false
-		crown.Massless = true
-		local weld = Instance.new("Weld")
+		-- Wide enough and high enough to sit on top of most hair
+		local radius = math.min(head.Size.X, head.Size.Z) * 0.5
+		local core = CrownModel.AddTo(crown, radius, { color = VIP_GOLD })
+		crown.PrimaryPart = core
+		crown:PivotTo(head.CFrame * CFrame.new(0, head.Size.Y / 2 + radius * 0.8, 0) * CFrame.Angles(math.rad(-6), 0, 0))
+		local weld = Instance.new("WeldConstraint")
 		weld.Part0 = head
-		weld.Part1 = crown
-		weld.C0 = CFrame.new(0, head.Size.Y / 2 + 0.3, 0)
-		weld.Parent = crown
+		weld.Part1 = core
+		weld.Parent = core
 		crown.Parent = character
 	end
 
